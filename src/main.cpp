@@ -16,6 +16,7 @@
 #include "config/ConfigManager.h"
 #include "setup/SetupPortal.h"
 #include "setup/FactoryResetDetector.h"
+#include "security/SecureTransport.h"
 
 LedService ledService;
 WiFiManager wifiManager;
@@ -52,6 +53,56 @@ SetupPortal setupPortal;
 FactoryResetDetector factoryResetDetector;
 bool setupMode = false;
 
+#if EDOL_AGENT_SMOKE_BUILD
+// Explicit lab-only USB entry points into the production upload services.
+void processSmokeConsole()
+{
+    static char command[128];
+    static size_t used = 0;
+    static bool overflow = false;
+    while (Serial.available())
+    {
+        const char value = static_cast<char>(Serial.read());
+        if (value == '\r') continue;
+        if (value != '\n')
+        {
+            if (used + 1 < sizeof(command) && !overflow) command[used++] = value;
+            else overflow = true;
+            continue;
+        }
+        command[used] = '\0';
+        if (overflow) Serial.println("SMOKE command rejected: too long");
+        else if (strcmp(command, "STATUS") == 0)
+            Serial.printf("SMOKE wifi=%u setup=%u\n", wifiManager.isConnected(), setupMode);
+        else if (strcmp(command, "SETUP") == 0)
+        {
+            bambuMqttClient.disconnect();
+            edolMqttClient.disconnect();
+            setupMode = true;
+            setupPortal.begin();
+            Serial.println("SMOKE existing setup portal opened; credentials preserved");
+        }
+        else if (setupMode || !wifiManager.isConnected())
+            Serial.println("SMOKE upload unavailable: setup or WiFi offline");
+        else if (strcmp(command, "SNAPSHOT") == 0)
+            Serial.printf("SMOKE snapshot=%s\n", agentService.uploadSnapshot() ? "PASS" : "FAIL");
+        else if (strncmp(command, "MODEL ", 6) == 0)
+        {
+            const char *name = command + 6;
+            bool valid = *name != '\0' && *name != '.';
+            for (const char *cursor = name; *cursor; ++cursor)
+                valid = valid && ((*cursor >= 'a' && *cursor <= 'z') || (*cursor >= 'A' && *cursor <= 'Z')
+                    || (*cursor >= '0' && *cursor <= '9') || *cursor == '.' || *cursor == '_' || *cursor == '-');
+            if (valid) Serial.printf("SMOKE model=%s\n", agentService.uploadModel(name) ? "PASS" : "FAIL");
+            else Serial.println("SMOKE model rejected: use a plain ASCII basename");
+        }
+        else Serial.println("SMOKE commands: STATUS, SNAPSHOT, MODEL <basename>, SETUP");
+        used = 0;
+        overflow = false;
+    }
+}
+#endif
+
 void handleBambuMessage(
     const char *topic,
     const byte *payload,
@@ -77,6 +128,9 @@ void handleEdolCommand(
 void setup()
 {
     Serial.begin(115200);
+#if EDOL_AGENT_SMOKE_BUILD
+    Serial.println("SMOKE lab console enabled; uploads require explicit USB commands");
+#endif
 
     ConfigManager::begin();
     ledService.begin();
@@ -119,6 +173,13 @@ void setup()
     {
         return;
     }
+#if EDOL_AGENT_SECURE_BUILD
+    if (!SecureTransport::synchronizeClock())
+    {
+        Serial.println("Secure agent requires synchronized time");
+        return;
+    }
+#endif
 
     bambuMqttClient.setMessageHandler(handleBambuMessage);
     edolMqttClient.setMessageHandler(handleEdolCommand);
@@ -129,6 +190,9 @@ void setup()
 
 void loop()
 {
+#if EDOL_AGENT_SMOKE_BUILD
+    processSmokeConsole();
+#endif
     static bool bootMarkedSuccessful = false;
 
     if (!bootMarkedSuccessful &&

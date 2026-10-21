@@ -6,6 +6,10 @@
 #include <WebServer.h>
 
 #include "../config/ConfigManager.h"
+#if EDOL_AGENT_SECURE_BUILD
+#include "../security/AgentEnrollmentClient.h"
+#include "../security/PairingProtocol.h"
+#endif
 
 namespace
 {
@@ -110,15 +114,7 @@ Use IP addresses without http:// prefix.
 <div class="card">
 <h2>EDOL</h2>
 
-<label>Agent ID</label>
-<input
-    type="text"
-    name="agentId"
-    value="%AGENT_ID%"
-    placeholder="agent-123456">
-
-<label>Agent Password</label>
-<input type="text" name="agentPassword" value="%AGENT_PASSWORD%">
+%IDENTITY_FIELDS%
 </div>
 
 <div class="card">
@@ -219,6 +215,20 @@ Factory Reset
 String buildSetupPage()
 {
     String html = SETUP_PAGE;
+#if EDOL_AGENT_SECURE_BUILD
+    html.replace("%IDENTITY_FIELDS%",
+        "<label>Pairing code from EDOL</label>"
+        "<input type=\"text\" name=\"pairingCode\" maxlength=\"12\" minlength=\"12\" "
+        "autocomplete=\"off\" required>"
+        "<p>Generate a new code in your printer's Agent page in EDOL.</p>");
+#else
+    html.replace("%IDENTITY_FIELDS%", R"HTML(
+<label>Agent ID</label>
+<input type="text" name="agentId" value="%AGENT_ID%" placeholder="agent-123456">
+<label>Agent Password</label>
+<input type="text" name="agentPassword" value="%AGENT_PASSWORD%">
+)HTML");
+#endif
 
     html.replace("%SSID%", ConfigManager::getWifiSSID());
     html.replace("%WIFI_PASSWORD%", ConfigManager::getWifiPassword());
@@ -292,13 +302,23 @@ void SetupPortal::registerRoutes()
 
     server.on("/save", HTTP_POST, []()
               {
+#if EDOL_AGENT_SECURE_BUILD
+                  String pairingCode = server.arg("pairingCode");
+                  if (!PairingProtocol::validCode(pairingCode.c_str()))
+                  {
+                      server.send(400, "text/plain", "Enter a valid pairing code.");
+                      return;
+                  }
+#endif
                   ConfigManager::setWifiSettings(
                       server.arg("ssid"),
                       server.arg("password"));
 
+#if !EDOL_AGENT_SECURE_BUILD
                   ConfigManager::setEdolSettings(
                       server.arg("agentId"),
                       server.arg("agentPassword"));
+#endif
 
                   ConfigManager::setBambuSettings(
                       server.arg("printerSerial"),
@@ -315,6 +335,19 @@ void SetupPortal::registerRoutes()
                       static_cast<uint16_t>(server.arg("ftpsPort").toInt()),
                       server.arg("ftpsUser"),
                       server.arg("ftpsDirectory"));
+
+#if EDOL_AGENT_SECURE_BUILD
+                  // Retain the existing open setup AP while the station joins the configured network.
+                  WiFi.mode(WIFI_AP_STA);
+                  WiFi.begin(ConfigManager::getWifiSSID().c_str(), ConfigManager::getWifiPassword().c_str());
+                  uint32_t started = millis();
+                  while (WiFi.status() != WL_CONNECTED && millis() - started < 20000) delay(100);
+                  if (WiFi.status() != WL_CONNECTED || !AgentEnrollmentClient::enroll(pairingCode.c_str()))
+                  {
+                      server.send(400, "text/plain", "Pairing failed. Check the network and use a fresh EDOL code.");
+                      return;
+                  }
+#endif
 
                   server.send(
                       200,

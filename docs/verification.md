@@ -1,5 +1,41 @@
 # Verification and publication record
 
+## Stage 9.3b.2 local HTTPS increment
+
+The sanitized baseline remains `14da63f360d4a288c7207340dc60cd9e78ce7907`.
+New source changes are isolated in `stage9-agent-pairing`, not pushed or flashed.
+The original records below describe the publication baseline, not these changes.
+
+- Five offline native C++ executables pass with compiler warnings treated as
+  errors. New cases cover UUID/code/host validation, separate credential-store
+  commit markers, interrupted writes, unchanged Home namespace, response caps,
+  secure upload paths, revoked-credential HTTP errors and fail-closed readiness.
+- Enrollment tests compile the production client with the real ArduinoJson
+  parser and fake HTTP/TLS. They cover non-200 responses, missing time/trust,
+  malformed/oversized JSON, invalid returned identities, storage failure,
+  one-request/no-retry behavior and connection cleanup. They do not prove TLS.
+- Three Python trust-hook cases pass: Home without CA, secure fail-closed
+  prerequisites, certificate-only/size validation and PEM-newline preservation.
+- Real Home build succeeds: RAM 14.5%, flash 75.6%, program size 990353 bytes.
+- Real secure build with a temporary public CA fixture succeeds: RAM 14.9%,
+  flash 78.1%, program size 1023965 bytes. The separate opt-in
+  `lolin_d32_secure_smoke` build passes: RAM 14.9%, flash 78.2%, program size
+  1025105 bytes. Both secure environments without the CA fail as required.
+  Temporary fixture and process-local environment are cleaned up.
+- PlatformIO config confirms Home stays the default and secure mode is explicit.
+- The existing open setup AP remains unchanged by operator instruction. No
+  password, label/card, or local-portal authentication was introduced.
+
+No firmware upload, NVS change, serial monitor, live backend/broker/printer,
+actual TLS handshake, power-cycle or operational enrollment was exercised.
+Secure MQTT remains disabled until the coordinated broker contract is ready.
+The lab build adds USB-triggered production snapshot/model uploads and a
+settings-preserving setup-portal command. Normal Home/secure builds contain
+no console. The backend disposable smoke workbook is prepared for a separately
+supervised real-device session; no console command was executed on hardware.
+Numeric HTTP/TLS diagnostics contain no credentials. Final Python source changes
+passed read-only Sonar snippet analysis; C++ is outside that tool's language list.
+
 Date: 2026-10-21. Target: `lolin_d32`, Arduino, one printer.
 
 ## Executed checks

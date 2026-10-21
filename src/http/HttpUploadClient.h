@@ -1,6 +1,10 @@
 #pragma once
 
 #include <HTTPClient.h>
+#include "../security/SecureConfig.h"
+#if EDOL_AGENT_SECURE_BUILD
+#include <WiFiClientSecure.h>
+#endif
 
 class HttpUploadClient : public Stream
 {
@@ -27,7 +31,11 @@ public:
     size_t write(uint8_t byte) override;
 
 private:
+#if EDOL_AGENT_SECURE_BUILD
+    WiFiClientSecure client_;
+#else
     WiFiClient client_;
+#endif
 
     size_t uploadedBytes_ = 0;
 

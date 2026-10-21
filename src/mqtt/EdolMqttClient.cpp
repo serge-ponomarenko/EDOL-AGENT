@@ -41,6 +41,10 @@ void EdolMqttClient::mqttCallback(
 
 bool EdolMqttClient::connect()
 {
+#if EDOL_AGENT_SECURE_BUILD
+    // The pairing increment provisions HTTPS identity only. Never send it over legacy MQTT.
+    return false;
+#else
     String agentId = ConfigManager::getEdolAgentId();
     String agentPass = ConfigManager::getEdolAgentPassword();
 
@@ -90,6 +94,7 @@ bool EdolMqttClient::connect()
     Serial.println("Connected to EDOL MQTT");
 
     return true;
+#endif
 }
 
 void EdolMqttClient::loop()

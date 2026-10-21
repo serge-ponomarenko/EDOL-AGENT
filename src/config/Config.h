@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "../security/SecureConfig.h"
 
 namespace Config {
 
@@ -36,7 +37,11 @@ constexpr const char* BAMBU_ACCESS_CODE = "";
 // ======== CORE SETTINGS ============================================
 
 constexpr const char* CORE_HOST = "";
+#if EDOL_AGENT_SECURE_BUILD
+constexpr uint16_t CORE_PORT = 443;
+#else
 constexpr uint16_t CORE_PORT = 8080;
+#endif
 
 constexpr const char* CORE_UPLOAD_PATH = "/api/agent/upload";
 

@@ -4,6 +4,11 @@
 #include <HTTPClient.h>
 
 #include "../config/ConfigManager.h"
+#if EDOL_AGENT_SECURE_BUILD
+#include "../security/AgentCredentialStore.h"
+#include "../security/PairingProtocol.h"
+#include "../security/SecureTransport.h"
+#endif
 
 static String urlEncode(const char *value)
 {
@@ -54,6 +59,18 @@ bool HttpUploadClient::begin(
 
     String encodedFileName = urlEncode(fileName);
 
+#if EDOL_AGENT_SECURE_BUILD
+    AgentIdentity identity;
+    if (!AgentCredentialStore::load(identity)) { abort(); return false; }
+    client_.printf(
+        "POST /api/agent/v1/upload?fileName=%s HTTP/1.1\r\n"
+        "Host: %s:%u\r\n"
+        "Authorization: EdolAgent %s.%s\r\n"
+        "Content-Type: application/octet-stream\r\n"
+        "Content-Length: %u\r\nConnection: close\r\n\r\n",
+        encodedFileName.c_str(), ConfigManager::getCoreHost().c_str(), ConfigManager::getCorePort(),
+        identity.id.c_str(), identity.secret.c_str(), static_cast<unsigned>(contentLength));
+#else
     client_.printf(
         "POST %s?fileName=%s HTTP/1.1\r\n"
         "Host: %s:%u\r\n"
@@ -68,6 +85,7 @@ bool HttpUploadClient::begin(
         ConfigManager::getCorePort(),
         ConfigManager::getEdolAgentId().c_str(),
         static_cast<unsigned>(contentLength));
+#endif
 
     return true;
 }
@@ -81,6 +99,19 @@ bool HttpUploadClient::beginSnapshotUpload(
         return false;
     }
 
+#if EDOL_AGENT_SECURE_BUILD
+    (void)agentId;
+    AgentIdentity identity;
+    if (!AgentCredentialStore::load(identity)) { abort(); return false; }
+    client_.printf(
+        "POST /api/agent/v1/camera/snapshot HTTP/1.1\r\n"
+        "Host: %s:%u\r\n"
+        "Authorization: EdolAgent %s.%s\r\n"
+        "Content-Type: image/jpeg\r\n"
+        "Content-Length: %u\r\nConnection: close\r\n\r\n",
+        ConfigManager::getCoreHost().c_str(), ConfigManager::getCorePort(),
+        identity.id.c_str(), identity.secret.c_str(), static_cast<unsigned>(contentLength));
+#else
     client_.printf(
         "POST /api/agent/camera/snapshot HTTP/1.1\r\n"
         "Host: %s:%u\r\n"
@@ -93,6 +124,7 @@ bool HttpUploadClient::beginSnapshotUpload(
         ConfigManager::getCorePort(),
         agentId,
         static_cast<unsigned>(contentLength));
+#endif
 
     return true;
 }
@@ -104,11 +136,21 @@ bool HttpUploadClient::connect(size_t contentLength)
     contentLength_ = contentLength;
     writeFailed_ = false;
 
+#if EDOL_AGENT_SECURE_BUILD
+    AgentIdentity identity;
+    if (!AgentCredentialStore::load(identity)
+        || !PairingProtocol::validHost(ConfigManager::getCoreHost().c_str())
+        || ConfigManager::getCorePort() == 0 || !SecureTransport::prepare(client_)) return false;
+#endif
     if (!client_.connect(
             ConfigManager::getCoreHost().c_str(),
             ConfigManager::getCorePort()))
     {
         Serial.println("HTTP connect failed");
+#if EDOL_AGENT_SECURE_BUILD
+        char ignored[1];
+        Serial.printf("Secure TLS error=%d\n", client_.lastError(ignored, sizeof(ignored)));
+#endif
         abort();
         return false;
     }

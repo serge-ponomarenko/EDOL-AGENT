@@ -13,6 +13,7 @@ class String
 {
 public:
     String(const char *value = "") : value_(value) {}
+    String(unsigned value) : value_(std::to_string(value)) {}
     const char *c_str() const { return value_.c_str(); }
     size_t length() const { return value_.size(); }
     void trim()
@@ -30,6 +31,10 @@ public:
     long toInt() const { return std::strtol(c_str(), nullptr, 10); }
     String &operator+=(char c) { value_ += c; return *this; }
     String &operator+=(const char *s) { value_ += s; return *this; }
+    friend String operator+(const String &left, const String &right)
+    {
+        return String((left.value_ + right.value_).c_str());
+    }
 
 private:
     std::string value_;

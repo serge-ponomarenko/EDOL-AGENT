@@ -1,4 +1,7 @@
 #include "ConfigManager.h"
+#if EDOL_AGENT_SECURE_BUILD
+#include "../security/AgentCredentialStore.h"
+#endif
 
 Preferences ConfigManager::preferences;
 bool ConfigManager::isInitialized = false;
@@ -16,6 +19,9 @@ void ConfigManager::clearAll()
 {
     begin();
     preferences.clear();
+#if EDOL_AGENT_SECURE_BUILD
+    AgentCredentialStore::clear();
+#endif
 }
 
 bool ConfigManager::isProvisioned()
@@ -27,6 +33,12 @@ bool ConfigManager::isProvisioned()
         preferences.isKey("wf_pass") &&
         preferences.isKey("edol_id") &&
         preferences.isKey("edol_pass");
+#if EDOL_AGENT_SECURE_BUILD
+    AgentIdentity identity;
+    provisioned = preferences.isKey("wf_ssid") && preferences.isKey("wf_pass")
+        && preferences.isKey("bambu_host") && preferences.isKey("bambu_ser") && preferences.isKey("bambu_code")
+        && AgentCredentialStore::load(identity);
+#endif
 
     Serial.printf(
         "Provisioned=%s\n",
