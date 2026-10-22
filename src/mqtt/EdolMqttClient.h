@@ -2,6 +2,10 @@
 
 #include <PubSubClient.h>
 #include <WiFiClient.h>
+#include "../security/SecureConfig.h"
+#if EDOL_AGENT_SECURE_BUILD
+#include <WiFiClientSecure.h>
+#endif
 
 #include <functional>
 
@@ -47,7 +51,11 @@ private:
     static EdolMqttClient *instance_;
 
     EdolMessageHandler messageHandler_;
+#if EDOL_AGENT_SECURE_BUILD
+    WiFiClientSecure wifiClient_;
+#else
     WiFiClient wifiClient_;
+#endif
     PubSubClient mqttClient_;
 
     String mqttHost_;

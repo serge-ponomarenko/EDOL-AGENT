@@ -48,10 +48,18 @@ constexpr const char* CORE_UPLOAD_PATH = "/api/agent/upload";
 // ======== EDOL MQTT SETTINGS =======================================
 
 constexpr const char* EDOL_MQTT_HOST = "";
+#if EDOL_AGENT_SECURE_BUILD
+constexpr uint16_t EDOL_MQTT_PORT = 8883;
+#else
 constexpr uint16_t EDOL_MQTT_PORT = 1783;
+#endif
 
 constexpr const char* EDOL_AGENT_ID = "";
 constexpr const char* EDOL_AGENT_PASSWORD = "";
+#if EDOL_AGENT_SECURE_BUILD
+constexpr const char* EDOL_AGENT_TOPIC_PREFIX = "edol/agent/v1/";
+#else
 constexpr const char* EDOL_AGENT_TOPIC_PREFIX = "edol/agents/";
+#endif
 
 }

@@ -107,7 +107,12 @@ String ConfigManager::getWifiPassword()
 
 String ConfigManager::getEdolAgentId()
 {
+#if EDOL_AGENT_SECURE_BUILD
+    AgentIdentity identity;
+    return AgentCredentialStore::load(identity) ? identity.id : String("");
+#else
     return readStringWithFallback("edol_id", Config::EDOL_AGENT_ID);
+#endif
 }
 
 String ConfigManager::getEdolAgentPassword()

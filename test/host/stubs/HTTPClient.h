@@ -58,6 +58,7 @@ struct FakeHttpState
     std::string response;
     std::string url;
     std::string request;
+    std::string authorization;
     int posts = 0;
     int ends = 0;
     int redirects = -1;
@@ -72,7 +73,10 @@ public:
     void setConnectTimeout(int) { }
     void setTimeout(int) { }
     void setFollowRedirects(followRedirects_t value) { httpState.redirects = value; }
-    void addHeader(const char *, const char *) { }
+    void addHeader(const char *name, const String &value)
+    {
+        if (std::strcmp(name, "Authorization") == 0) httpState.authorization = value.c_str();
+    }
     int POST(const String &request) { ++httpState.posts; httpState.request = request.c_str(); return httpState.status; }
     int writeToStream(Stream *stream)
     {

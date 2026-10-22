@@ -10,7 +10,7 @@ import tempfile
 def run_test(root, name, production_source, secure=False):
     sources = [root / f"test/host/{name}_test.cpp", root / production_source]
     extra_includes = []
-    if name == "enrollment":
+    if name in ("enrollment", "mqtt_enrollment"):
         library = root / ".pio/libdeps/lolin_d32/ArduinoJson/src"
         if not library.is_dir():
             raise RuntimeError("Build lolin_d32 first to resolve the real ArduinoJson parser for enrollment tests")
@@ -53,6 +53,9 @@ def main():
     run_test(root, "credential", "src/security/AgentCredentialStore.cpp")
     run_test(root, "secure_upload", "src/http/HttpUploadClient.cpp", secure=True)
     run_test(root, "enrollment", "src/security/AgentEnrollmentClient.cpp", secure=True)
+    run_test(root, "mqtt_enrollment", "src/security/AgentMqttEnrollmentClient.cpp", secure=True)
+    run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp")
+    run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp", secure=True)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,10 @@
 #include <Arduino.h>
 
 #include "../config/ConfigManager.h"
+#include "../security/AgentCredentialStore.h"
+#include "../security/AgentMqttEnrollmentClient.h"
+#include "../security/PairingProtocol.h"
+#include "../security/SecureTransport.h"
 
 EdolMqttClient *EdolMqttClient::instance_ = nullptr;
 
@@ -42,8 +46,31 @@ void EdolMqttClient::mqttCallback(
 bool EdolMqttClient::connect()
 {
 #if EDOL_AGENT_SECURE_BUILD
-    // The pairing increment provisions HTTPS identity only. Never send it over legacy MQTT.
-    return false;
+    AgentIdentity identity;
+    String password;
+    mqttHost_ = ConfigManager::getEdolMqttHost();
+    if (!AgentCredentialStore::load(identity) || !PairingProtocol::validHost(mqttHost_.c_str())
+        || ConfigManager::getEdolMqttPort() == 0 || !SecureTransport::synchronizeClock()) return false;
+    if (!AgentCredentialStore::loadMqtt(password))
+    {
+        if (!AgentMqttEnrollmentClient::provision() || !AgentCredentialStore::loadMqtt(password)) return false;
+    }
+    if (!SecureTransport::prepare(wifiClient_)) return false;
+    mqttClient_.setServer(mqttHost_.c_str(), ConfigManager::getEdolMqttPort());
+    if (!mqttClient_.setBufferSize(8192)) return false;
+    mqttClient_.setCallback(mqttCallback);
+    mqttClient_.setSocketTimeout(10);
+    String clientId = String("edol-agent:") + identity.id;
+    String username = String("agent:") + identity.id;
+    if (!mqttClient_.connect(clientId.c_str(), username.c_str(), password.c_str())) return false;
+    String prefix = String(Config::EDOL_AGENT_TOPIC_PREFIX) + identity.id;
+    if (!mqttClient_.subscribe((prefix + "/commands/printer").c_str())
+        || !mqttClient_.subscribe((prefix + "/commands/agent").c_str()))
+    {
+        disconnect();
+        return false;
+    }
+    return true;
 #else
     String agentId = ConfigManager::getEdolAgentId();
     String agentPass = ConfigManager::getEdolAgentPassword();

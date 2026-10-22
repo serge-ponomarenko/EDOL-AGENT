@@ -27,6 +27,17 @@ int main()
     assert(AgentCredentialStore::load(identity));
     assert(std::strcmp(identity.id.c_str(), id) == 0);
     assert(std::strcmp(identity.secret.c_str(), secret) == 0);
+    String mqttSecret;
+    assert(!AgentCredentialStore::loadMqtt(mqttSecret));
+    assert(AgentCredentialStore::beginMqttProvisioning());
+    assert(!AgentCredentialStore::beginMqttProvisioning());
+    assert(AgentCredentialStore::saveMqtt("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"));
+    assert(AgentCredentialStore::loadMqtt(mqttSecret));
+    assert(std::strcmp(mqttSecret.c_str(), secret) != 0);
+    preferencesState.writesBeforeFailure = 1;
+    assert(!AgentCredentialStore::saveMqtt(secret));
+    assert(!AgentCredentialStore::loadMqtt(mqttSecret));
+    preferencesState.writesBeforeFailure = 1000;
     assert(!AgentCredentialStore::save("bad", secret));
     assert(AgentCredentialStore::load(identity));
     preferencesState.writesBeforeFailure = 2;

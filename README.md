@@ -40,9 +40,9 @@ provisioned. This cleanup does not erase or migrate NVS.
 
 ## Secure pairing development profile
 
-Stage 9 source adds `lolin_d32_secure` for HTTPS enrollment and uploads. It is
-not a complete secure MQTT agent yet: secure MQTT connections intentionally
-remain disabled until broker identity, ACL and revocation work is accepted.
+Stage 9 source adds `lolin_d32_secure` for HTTPS enrollment/uploads and verified
+TLS MQTT through the coordinated single-Mosquitto broker contract. Source and
+disposable checks do not establish physical Agent acceptance.
 Keep existing working deployments on their accepted firmware.
 
 Home remains the default `lolin_d32` environment and needs no CA configuration.
@@ -61,6 +61,15 @@ persisted; the issued identity is stored separately in `edol_agent_sec`, using
 a final commit marker. Existing Home keys in `edol_config` are unchanged.
 Secure uploads use fixed v1 routes and the issued credential, never the Home
 agent ID. Redirects and plaintext fallback are disabled for enrollment.
+
+Secure MQTT uses CA-verified TLS to the configured broker (default port 8883).
+On its first connection it requests a distinct one-time MQTT secret over the
+authenticated HTTPS route `/api/agent/v1/mqtt/credentials`. It never uses the
+HTTPS secret as the MQTT password. Username/client ID and all secure topics use
+the issued Agent UUID. The MQTT secret and attempt/readiness markers live in
+`edol_agent_sec`; Home keys remain unchanged. Lost provisioning responses require
+owner replacement, not retries to retrieve a secret. Normal reconnect reuses the
+retained MQTT secret and restores subscriptions without clearing identity.
 
 The existing open setup AP and connection procedure are deliberately unchanged
 by operator decision. This retains a local-trust setup boundary, including
@@ -87,8 +96,8 @@ line endings. Home and ordinary secure builds contain no smoke console.
   enrollment response invalidates readiness and requires owner rotation.
 
 Uploads read real printer data and write only to the chosen Core destination.
-They do not start a print or send motion commands. The current secure broker
-connection remains disabled; this console cannot prove MQTT end-to-end behavior.
+They do not start a print or send motion commands. This console alone cannot
+prove MQTT end-to-end behavior.
 Do not deploy the lab build as normal firmware. Restore the ordinary approved
 build after the test without erase, and verify recovery separately. Follow the
 backend Stage 9 disposable smoke workbook and confirm the Agent's USB port;
@@ -105,7 +114,7 @@ git diff --check
 ```
 
 On Windows, `py -3` can replace `python`. Building Home first resolves the real
-ArduinoJson parser used by the enrollment host test. The five C++ executables
+ArduinoJson parser used by the enrollment host tests. Eight C++ executables
 exercise production Home upload/AgentService, credential storage, bounded
 enrollment and secure upload routing with fake sockets; they do not establish
 TLS certificate behavior. The three Python cases check the CA build hook.
@@ -118,16 +127,17 @@ in a separate directory with fresh Git history. Never copy the original `.git`.
 ## Known limits and coordination
 
 - Home EDOL MQTT and uploads use plaintext transports. The development secure
-  profile adds CA-verified HTTPS code paths and blocks legacy MQTT entirely.
+  profile adds CA-verified HTTPS/MQTT and uses a separate versioned MQTT namespace.
   Printer MQTT, FTPS and camera still use certificate verification disabled
   (`setInsecure()`); this is a distinct local-printer limitation.
 - The setup AP is open, its HTTP portal is unauthenticated, and it prepopulates
   stored credentials. Preferences storage is not encrypted by this firmware.
-- Home command forwarding trusts its connected broker. Complete secure broker
-  authentication/authorization and active-session revocation are still pending.
+- Home command forwarding trusts its connected broker. Secure broker credentials,
+  ACLs and active-session revocation require the coordinated Core/Mosquitto release.
 - MQTT callbacks assume one instance per client type. Transfers are synchronous
-  and can delay MQTT processing. Reconnect timing and existing topics, payloads,
-  upload endpoints and credential formats are preserved.
+  and can delay MQTT processing. Home topics/settings remain unchanged; secure
+  MQTT uses `edol/agent/v1/{issuedAgentId}/...`. Firmware sends QoS 0 reports and
+  uses clean sessions; commands are not durable or retained.
 - Camera support depends on the printer's existing camera protocol. Snapshot
   health now requires both successful streaming and the expected HTTP status.
 - No hardware, reconnect, throughput or live backend acceptance was performed.

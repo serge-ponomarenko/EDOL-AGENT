@@ -1,5 +1,26 @@
 # Verification and publication record
 
+## Stage 9.3b secure MQTT continuation — 2026-10-22
+
+The local branch now implements server-authenticated MQTT TLS, separate
+one-time MQTT provisioning, persisted attempt/readiness markers, issued-ID
+topics/command filters, and reconnect subscription recovery. The coordinated
+backend uses one Mosquitto broker for service and Agent traffic.
+
+- Eight offline native executables PASS, including Home/secure MQTT identity,
+  topic/filter selection, reconnect/reconstruction, one-time HTTPS MQTT
+  provisioning, response bounds and interrupted storage. Sockets remain fake;
+  these do not prove ESP32 TLS handshakes or power-cycle behavior.
+- Three Python trust-hook tests PASS.
+- Home, secure and secure_smoke ESP32 builds PASS. Both secure builds without
+  a CA fail as required. The temporary public-root CA fixture was removed;
+  no private key was read and no upload/serial operation occurred.
+
+Physical telemetry, commands, uploads, TLS failures, reconnect/power cycle,
+revoke/replace and restoration remain NOT RUN in the backend combined workbook.
+No commit, push, published-main change or working broker/database cutover is
+implied by this verification. Historical HTTPS-only records below remain dated.
+
 ## Stage 9.3b.2 local HTTPS increment
 
 The sanitized baseline remains `14da63f360d4a288c7207340dc60cd9e78ce7907`.

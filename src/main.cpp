@@ -167,6 +167,9 @@ void setup()
         return;
     }
 
+    // Register callbacks even if initial Wi-Fi or time synchronization fails; loop retries later.
+    bambuMqttClient.setMessageHandler(handleBambuMessage);
+    edolMqttClient.setMessageHandler(handleEdolCommand);
     delay(1000);
 
     if (!wifiManager.connect())
@@ -180,9 +183,6 @@ void setup()
         return;
     }
 #endif
-
-    bambuMqttClient.setMessageHandler(handleBambuMessage);
-    edolMqttClient.setMessageHandler(handleEdolCommand);
 
     bambuMqttClient.connect();
     edolMqttClient.connect();

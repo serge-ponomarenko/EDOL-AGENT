@@ -16,12 +16,12 @@ CommandProcessor::CommandProcessor(
 void CommandProcessor::initialize()
 {
     printerCommandTopic_ =
-        String("edol/agents/") +
+        String(Config::EDOL_AGENT_TOPIC_PREFIX) +
         ConfigManager::getEdolAgentId() +
         "/commands/printer";
 
     agentCommandTopic_ =
-        String("edol/agents/") +
+        String(Config::EDOL_AGENT_TOPIC_PREFIX) +
         ConfigManager::getEdolAgentId() +
         "/commands/agent";
 
