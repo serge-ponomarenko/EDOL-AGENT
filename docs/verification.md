@@ -1,5 +1,36 @@
 # Verification and publication record
 
+## Stage 9 enrollment TLS diagnostics — 2026-10-23
+
+The operator reported secure_smoke `65b1fd9` FLASH/boot/portal PASS, followed
+by enrollment TLS -9984. This aggregate error does not establish a clock,
+trust-chain or endpoint-name cause. Enrollment, MQTT and printer telemetry via
+Agent remain unaccepted. No hardware action was performed in this increment.
+
+Secure clock readiness now requires an observed SNTP callback this boot and
+continuity against a monotonic anchor. The old plausible-epoch lower bound
+alone was insufficient. CA verification, required hostname checks and no
+plaintext fallback remain. Home behavior and NVS keys are unchanged.
+
+Lab-only TIME/TLS commands report UTC/NTP, embedded public CA PEM SHA256 and
+available X.509 verification flags. TLS connects only to configured Core and
+sends no HTTP request or credential. A small WiFiClientSecure subclass preserves
+flags before Arduino 2.0.17 frees its failed-handshake state; unavailable flags
+remain unavailable. Host fakes exercise this lifetime, not actual mbedTLS trust.
+
+Targeted verification: **9 native executables PASS**, **3 Python trust-hook
+tests PASS**; Home, secure and secure_smoke ESP32 builds PASS. Both secure
+environments without a CA failed as required. The existing public CA SHA256
+matched `6494dae1329c5443d742f53e0b38b8b59184a53d268bac397d801c18f04a9ec6`.
+Read-only Sonar checked the three changed Python files without findings; the
+available analyzer does not support C++. No live TLS, enrollment, MQTT, flash,
+serial, printer operation or NVS modification was performed.
+
+The previous build artifact was preserved under ignored `stage9-restoration/`;
+it is not a device flash dump. Resume and rollback instructions are maintained
+in the coordinated backend `docs/deployment/stage9-hardware-remediation.md`.
+The older records below describe their own verification scope and limitations.
+
 ## Stage 9.3b secure MQTT continuation — 2026-10-22
 
 The local branch now implements server-authenticated MQTT TLS, separate

@@ -19,7 +19,7 @@ bool AgentMqttEnrollmentClient::provision()
     String host = ConfigManager::getCoreHost();
     if (!AgentCredentialStore::load(identity) || !PairingProtocol::validHost(host.c_str())
         || ConfigManager::getCorePort() == 0 || !SecureTransport::synchronizeClock()) return false;
-    WiFiClientSecure transport;
+    SecureTransport::Client transport;
     if (!SecureTransport::prepare(transport)) return false;
     HTTPClient http;
     auto close = [&]() { http.end(); transport.stop(); };
@@ -35,7 +35,13 @@ bool AgentMqttEnrollmentClient::provision()
     if (!AgentCredentialStore::beginMqttProvisioning()) return false;
     int status = http.POST("");
     Serial.printf("MQTT provisioning HTTP status=%d\n", status);
-    if (status != 200) return false;
+    if (status != 200)
+    {
+#if EDOL_AGENT_SMOKE_BUILD
+        if (status < 0) SecureTransport::reportFailure(transport, "mqtt-credentials", host.c_str(), ConfigManager::getCorePort());
+#endif
+        return false;
+    }
     BoundedResponse response;
     if (http.writeToStream(&response) < 0 || response.failed()) return false;
     JsonDocument document;

@@ -54,8 +54,14 @@ public:
 
 struct FakeSerial
 {
-    template <typename... Args> void printf(const char *, Args...) {}
-    void println(const char *) {}
+    std::string output;
+    template <typename... Args> void printf(const char *format, Args... args)
+    {
+        char buffer[1024];
+        int size = std::snprintf(buffer, sizeof(buffer), format, args...);
+        if (size > 0) output.append(buffer, std::min(static_cast<size_t>(size), sizeof(buffer) - 1));
+    }
+    void println(const char *message) { output += message; output += '\n'; }
 };
 
 extern FakeSerial Serial;

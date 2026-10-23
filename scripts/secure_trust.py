@@ -1,6 +1,7 @@
 """Generate a build-local public CA header only for the explicit secure environment."""
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import ssl
@@ -27,7 +28,9 @@ def write_trust_header(environment):
     (output / "edol_agent_trust.h").write_text(
         "#pragma once\nstatic const char EDOL_AGENT_ROOT_CA[] = "
         + json.dumps(certificate, ensure_ascii=True)
-        + ";\nstatic constexpr long EDOL_AGENT_BUILD_EPOCH = " + str(int(time.time())) + ";\n",
+        + ";\nstatic const char EDOL_AGENT_ROOT_CA_SHA256[] = \""
+        + hashlib.sha256(certificate.encode("ascii")).hexdigest()
+        + "\";\nstatic constexpr long EDOL_AGENT_BUILD_EPOCH = " + str(int(time.time())) + ";\n",
         encoding="ascii",
     )
     environment.Append(CPPPATH=[str(output)])

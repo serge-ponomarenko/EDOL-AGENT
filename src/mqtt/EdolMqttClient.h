@@ -4,7 +4,7 @@
 #include <WiFiClient.h>
 #include "../security/SecureConfig.h"
 #if EDOL_AGENT_SECURE_BUILD
-#include <WiFiClientSecure.h>
+#include "../security/SecureTransport.h"
 #endif
 
 #include <functional>
@@ -52,7 +52,7 @@ private:
 
     EdolMessageHandler messageHandler_;
 #if EDOL_AGENT_SECURE_BUILD
-    WiFiClientSecure wifiClient_;
+    SecureTransport::Client wifiClient_;
 #else
     WiFiClient wifiClient_;
 #endif

@@ -150,6 +150,9 @@ bool HttpUploadClient::connect(size_t contentLength)
 #if EDOL_AGENT_SECURE_BUILD
         char ignored[1];
         Serial.printf("Secure TLS error=%d\n", client_.lastError(ignored, sizeof(ignored)));
+#if EDOL_AGENT_SMOKE_BUILD
+        SecureTransport::reportFailure(client_, "upload", ConfigManager::getCoreHost().c_str(), ConfigManager::getCorePort());
+#endif
 #endif
         abort();
         return false;

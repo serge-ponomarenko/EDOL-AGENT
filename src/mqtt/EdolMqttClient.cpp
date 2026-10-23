@@ -62,7 +62,13 @@ bool EdolMqttClient::connect()
     mqttClient_.setSocketTimeout(10);
     String clientId = String("edol-agent:") + identity.id;
     String username = String("agent:") + identity.id;
-    if (!mqttClient_.connect(clientId.c_str(), username.c_str(), password.c_str())) return false;
+    if (!mqttClient_.connect(clientId.c_str(), username.c_str(), password.c_str()))
+    {
+#if EDOL_AGENT_SMOKE_BUILD
+        SecureTransport::reportFailure(wifiClient_, "mqtt", mqttHost_.c_str(), ConfigManager::getEdolMqttPort());
+#endif
+        return false;
+    }
     String prefix = String(Config::EDOL_AGENT_TOPIC_PREFIX) + identity.id;
     if (!mqttClient_.subscribe((prefix + "/commands/printer").c_str())
         || !mqttClient_.subscribe((prefix + "/commands/agent").c_str()))

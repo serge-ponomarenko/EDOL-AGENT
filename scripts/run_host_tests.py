@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 
-def run_test(root, name, production_source, secure=False):
+def run_test(root, name, production_source, secure=False, smoke=False):
     sources = [root / f"test/host/{name}_test.cpp", root / production_source]
     extra_includes = []
     if name in ("enrollment", "mqtt_enrollment"):
@@ -30,6 +30,8 @@ def run_test(root, name, production_source, secure=False):
                     *map(str, sources), f"/Fe:{executable}"]
             if secure:
                 args.append("/DEDOL_AGENT_SECURE_BUILD=1")
+            if smoke:
+                args.append("/DEDOL_AGENT_SMOKE_BUILD=1")
             batch = Path(tmp) / "build.cmd"
             batch.write_text(f'@echo off\ncall "{vcvars}" >nul\nif errorlevel 1 exit /b 1\n'
                              + subprocess.list2cmdline(args) + "\nexit /b %errorlevel%\n")
@@ -40,6 +42,7 @@ def run_test(root, name, production_source, secure=False):
                 raise RuntimeError("A native C++ compiler is required")
             subprocess.run([compiler, "-std=c++11", "-Wall", "-Wextra", "-Werror",
                             *(["-DEDOL_AGENT_SECURE_BUILD=1"] if secure else []),
+                            *(["-DEDOL_AGENT_SMOKE_BUILD=1"] if smoke else []),
                             f"-I{root / 'test/host/stubs'}", f"-I{root / 'src'}",
                             *[f"-I{path}" for path in extra_includes],
                             *map(str, sources), "-o", str(executable)], cwd=tmp, check=True)
@@ -56,6 +59,7 @@ def main():
     run_test(root, "mqtt_enrollment", "src/security/AgentMqttEnrollmentClient.cpp", secure=True)
     run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp")
     run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp", secure=True)
+    run_test(root, "secure_transport", "src/security/SecureTransport.cpp", secure=True, smoke=True)
 
 
 if __name__ == "__main__":

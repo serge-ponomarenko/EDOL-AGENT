@@ -87,6 +87,11 @@ CA prerequisite. It adds a bounded USB serial console at 115200 baud with LF
 line endings. Home and ordinary secure builds contain no smoke console.
 
 - `STATUS` reports Wi-Fi/setup flags only.
+- `TIME` attempts bounded SNTP synchronization and reports UTC epoch, build epoch,
+  observed synchronization/readiness and the SHA256 of the embedded public CA PEM.
+- `TLS` verifies a TLS-only connection to the configured Core host/port. It sends
+  no HTTP request or credential and cannot consume a pairing code. Failure reports
+  numeric TLS/X.509 flags when available, including time/name/trust categories.
 - `SNAPSHOT` calls the production camera-to-HTTPS upload service once.
 - `MODEL example.3mf` reads an existing printer file through the production FTPS
   service and streams it to Core. Only plain ASCII basenames are accepted.
@@ -114,10 +119,16 @@ git diff --check
 ```
 
 On Windows, `py -3` can replace `python`. Building Home first resolves the real
-ArduinoJson parser used by the enrollment host tests. Eight C++ executables
+ArduinoJson parser used by the enrollment host tests. Nine C++ executables
 exercise production Home upload/AgentService, credential storage, bounded
 enrollment and secure upload routing with fake sockets; they do not establish
-TLS certificate behavior. The three Python cases check the CA build hook.
+real TLS certificate behavior. The transport fake additionally checks clock
+readiness and flag retention before Arduino clears failed-handshake state.
+Secure transports require an observed SNTP callback during this boot and reject
+clock jumps from its monotonic anchor; a plausible build-time lower bound alone
+does not establish readiness. SNTP is not authenticated time. Certificate chain,
+validity and endpoint checks remain the TLS verifier's responsibility.
+The three Python cases check the CA build hook.
 They do not contact devices or services. Review every intended file and
 every outgoing commit for secrets before pushing. `.pio`, IDE state, local
 configuration, keys, logs, dumps and firmware binaries must stay local.

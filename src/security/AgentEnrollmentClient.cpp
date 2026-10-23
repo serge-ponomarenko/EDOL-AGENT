@@ -18,8 +18,11 @@ bool AgentEnrollmentClient::enroll(const char *code)
     String host = ConfigManager::getCoreHost();
     if (!PairingProtocol::validCode(code) || !PairingProtocol::validHost(host.c_str())
         || ConfigManager::getCorePort() == 0 || !SecureTransport::synchronizeClock()) return false;
-    WiFiClientSecure transport;
+    SecureTransport::Client transport;
     if (!SecureTransport::prepare(transport)) return false;
+#if EDOL_AGENT_SMOKE_BUILD
+    SecureTransport::reportClock("enrollment");
+#endif
     HTTPClient http;
     auto close = [&]() { http.end(); transport.stop(); };
     ScopeExit<decltype(close)> cleanup(close);
@@ -39,6 +42,9 @@ bool AgentEnrollmentClient::enroll(const char *code)
         {
             char ignored[1];
             Serial.printf("Secure TLS error=%d\n", transport.lastError(ignored, sizeof(ignored)));
+#if EDOL_AGENT_SMOKE_BUILD
+            SecureTransport::reportFailure(transport, "enrollment", host.c_str(), ConfigManager::getCorePort());
+#endif
         }
         return false;
     }

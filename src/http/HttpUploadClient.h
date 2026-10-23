@@ -3,7 +3,7 @@
 #include <HTTPClient.h>
 #include "../security/SecureConfig.h"
 #if EDOL_AGENT_SECURE_BUILD
-#include <WiFiClientSecure.h>
+#include "../security/SecureTransport.h"
 #endif
 
 class HttpUploadClient : public Stream
@@ -32,7 +32,7 @@ public:
 
 private:
 #if EDOL_AGENT_SECURE_BUILD
-    WiFiClientSecure client_;
+    SecureTransport::Client client_;
 #else
     WiFiClient client_;
 #endif

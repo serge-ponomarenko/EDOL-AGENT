@@ -1,0 +1,7 @@
+#pragma once
+// SDK-compatible numeric values for offline diagnostics tests only.
+#define MBEDTLS_ERR_X509_CERT_VERIFY_FAILED -0x2700
+#define MBEDTLS_X509_BADCERT_EXPIRED 0x01
+#define MBEDTLS_X509_BADCERT_CN_MISMATCH 0x04
+#define MBEDTLS_X509_BADCERT_NOT_TRUSTED 0x08
+#define MBEDTLS_X509_BADCERT_FUTURE 0x0200

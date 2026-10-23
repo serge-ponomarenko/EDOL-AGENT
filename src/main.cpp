@@ -74,6 +74,12 @@ void processSmokeConsole()
         if (overflow) Serial.println("SMOKE command rejected: too long");
         else if (strcmp(command, "STATUS") == 0)
             Serial.printf("SMOKE wifi=%u setup=%u\n", wifiManager.isConnected(), setupMode);
+        else if (strcmp(command, "TIME") == 0)
+        {
+            SecureTransport::synchronizeClock();
+            SecureTransport::reportClock("console");
+        }
+        else if (strcmp(command, "TLS") == 0) SecureTransport::probeCore();
         else if (strcmp(command, "SETUP") == 0)
         {
             bambuMqttClient.disconnect();
@@ -96,7 +102,7 @@ void processSmokeConsole()
             if (valid) Serial.printf("SMOKE model=%s\n", agentService.uploadModel(name) ? "PASS" : "FAIL");
             else Serial.println("SMOKE model rejected: use a plain ASCII basename");
         }
-        else Serial.println("SMOKE commands: STATUS, SNAPSHOT, MODEL <basename>, SETUP");
+        else Serial.println("SMOKE commands: STATUS, TIME, TLS, SNAPSHOT, MODEL <basename>, SETUP");
         used = 0;
         overflow = false;
     }

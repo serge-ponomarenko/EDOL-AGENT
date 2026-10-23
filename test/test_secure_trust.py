@@ -1,6 +1,7 @@
 """Offline build-hook checks; generated CA fixtures are public system trust roots."""
 
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -58,6 +59,7 @@ class SecureTrustTest(unittest.TestCase):
             header = (directory / "generated/edol_agent_trust.h").read_text(encoding="ascii")
             encoded = header.split("EDOL_AGENT_ROOT_CA[] = ", 1)[1].split(";\n", 1)[0]
             self.assertEqual(json.loads(encoded), certificate)
+            self.assertIn(hashlib.sha256(certificate.encode("ascii")).hexdigest(), header)
             self.assertEqual(environment.includes, [str(directory / "generated")])
 
     def test_private_keys_oversized_and_invalid_inputs_are_rejected(self):
