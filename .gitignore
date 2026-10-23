@@ -28,5 +28,6 @@ Config.local.h
 /logs/
 /dumps/
 /secrets/
+/stage9-restoration/
 __pycache__/
 .vscode/
