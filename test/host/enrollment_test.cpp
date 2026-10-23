@@ -80,5 +80,20 @@ int main()
     storageOk = false;
     assert(!AgentEnrollmentClient::enroll("0123456789AB"));
     assert(!stored && httpState.posts == 1);
+    reset();
+    socketState.connectOk = false;
+    assert(AgentEnrollmentClient::enrollDetailed("0123456789AB") == ProvisioningResult::TlsFailed);
+    assert(!stored && httpState.posts == 0);
+    socketState.connectOk = true;
+    assert(AgentEnrollmentClient::enroll("0123456789AB") && stored);
+    reset();
+    httpState.status = -1;
+    assert(AgentEnrollmentClient::enrollDetailed("0123456789AB") == ProvisioningResult::EnrollmentUncertain);
+    reset();
+    httpState.status = 429;
+    assert(AgentEnrollmentClient::enrollDetailed("0123456789AB") == ProvisioningResult::RateLimited);
+    reset();
+    httpState.status = 401;
+    assert(AgentEnrollmentClient::enrollDetailed("0123456789AB") == ProvisioningResult::CodeRejected);
     std::cout << "Enrollment contract and failure tests passed (fake HTTP/TLS, real JSON parser)\n";
 }

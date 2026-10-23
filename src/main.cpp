@@ -17,6 +17,9 @@
 #include "setup/SetupPortal.h"
 #include "setup/FactoryResetDetector.h"
 #include "security/SecureTransport.h"
+#if EDOL_AGENT_SECURE_BUILD
+#include "security/AgentCredentialStore.h"
+#endif
 
 LedService ledService;
 WiFiManager wifiManager;
@@ -85,7 +88,7 @@ void processSmokeConsole()
             bambuMqttClient.disconnect();
             edolMqttClient.disconnect();
             setupMode = true;
-            setupPortal.begin();
+            setupPortal.begin(&edolMqttClient);
             Serial.println("SMOKE existing setup portal opened; credentials preserved");
         }
         else if (setupMode || !wifiManager.isConnected())
@@ -165,11 +168,17 @@ void setup()
         ESP.restart();
     }
 
-    if (!ConfigManager::isProvisioned())
+    bool needsSetup = !ConfigManager::isProvisioned();
+#if EDOL_AGENT_SECURE_BUILD
+    String mqttSecret;
+    needsSetup = needsSetup || (AgentCredentialStore::mqttProvisioningAttempted()
+        && !AgentCredentialStore::loadMqtt(mqttSecret));
+#endif
+    if (needsSetup)
     {
         ledService.setOn();
         setupMode = true;
-        setupPortal.begin();
+        setupPortal.begin(&edolMqttClient);
         return;
     }
 

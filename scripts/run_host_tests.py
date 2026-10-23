@@ -8,7 +8,9 @@ import tempfile
 
 
 def run_test(root, name, production_source, secure=False, smoke=False):
-    sources = [root / f"test/host/{name}_test.cpp", root / production_source]
+    sources = [root / f"test/host/{name}_test.cpp"]
+    if production_source:
+        sources.append(root / production_source)
     extra_includes = []
     if name in ("enrollment", "mqtt_enrollment"):
         library = root / ".pio/libdeps/lolin_d32/ArduinoJson/src"
@@ -60,6 +62,7 @@ def main():
     run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp")
     run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp", secure=True)
     run_test(root, "secure_transport", "src/security/SecureTransport.cpp", secure=True, smoke=True)
+    run_test(root, "provisioning", None, secure=True)
 
 
 if __name__ == "__main__":

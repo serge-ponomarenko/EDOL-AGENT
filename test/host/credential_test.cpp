@@ -29,7 +29,9 @@ int main()
     assert(std::strcmp(identity.secret.c_str(), secret) == 0);
     String mqttSecret;
     assert(!AgentCredentialStore::loadMqtt(mqttSecret));
+    assert(!AgentCredentialStore::mqttProvisioningAttempted());
     assert(AgentCredentialStore::beginMqttProvisioning());
+    assert(AgentCredentialStore::mqttProvisioningAttempted());
     assert(!AgentCredentialStore::beginMqttProvisioning());
     assert(AgentCredentialStore::saveMqtt("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"));
     assert(AgentCredentialStore::loadMqtt(mqttSecret));

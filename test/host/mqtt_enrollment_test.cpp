@@ -28,6 +28,7 @@ bool AgentCredentialStore::beginMqttProvisioning()
     attempted = true;
     return true;
 }
+bool AgentCredentialStore::mqttProvisioningAttempted() { return attempted; }
 bool AgentCredentialStore::saveMqtt(const char *secret)
 {
     stored = PairingProtocol::validIdentity("00000000-0000-4000-8000-000000000001", secret);
@@ -66,5 +67,11 @@ int main()
     reset();
     clockReady = false;
     assert(!AgentMqttEnrollmentClient::provision() && !attempted && httpState.posts == 0);
+    reset();
+    socketState.connectOk = false;
+    assert(AgentMqttEnrollmentClient::provisionDetailed() == ProvisioningResult::TlsFailed);
+    assert(!attempted && httpState.posts == 0);
+    socketState.connectOk = true;
+    assert(AgentMqttEnrollmentClient::provision() && attempted && stored);
     std::cout << "One-time MQTT provisioning contract passed (fake HTTP/TLS)\n";
 }

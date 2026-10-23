@@ -64,6 +64,15 @@ bool AgentCredentialStore::beginMqttProvisioning()
     return fresh;
 }
 
+bool AgentCredentialStore::mqttProvisioningAttempted()
+{
+    Preferences preferences;
+    if (!preferences.begin(NAMESPACE, true)) return false;
+    bool attempted = preferences.getBool("mqtt_tried", false);
+    preferences.end();
+    return attempted;
+}
+
 bool AgentCredentialStore::saveMqtt(const char *secret)
 {
     AgentIdentity identity;

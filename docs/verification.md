@@ -1,5 +1,51 @@
 # Verification and publication record
 
+## Single-form secure setup — 2026-10-23
+
+Source now keeps one form open while automatically performing Wi-Fi, NTP,
+verified Core TLS, one-time enrollment, distinct MQTT provisioning and MQTT TLS
+connection/subscriptions; success reboots into normal operation. The code is
+RAM-only, never prefilled/logged, bounded to five minutes locally, and cleared
+on success/rejection/uncertain enrollment. A blank resubmission preserves its
+original deadline. Settings stay in existing NVS keys. Existing identities can
+be retained with a blank code; uncertainty never silently resets MQTT markers.
+Restart with an attempted issuance but no usable secret reopens the same portal
+with owner-replacement instructions. Home provisioning semantics are unchanged.
+
+Production enrollment/MQTT clients now distinguish pre-send TLS failure from
+an uncertain POST response. Verified TLS is established before the MQTT attempt
+marker is committed; lost/invalid responses after that point remain fail closed.
+
+Targeted host verification: all **10 native executables passed**, including
+sequence, backoff from blocking-call completion, code expiry/wraparound, blank
+resubmission, retained identity and no replay after restart. Enrollment tests
+cover pre-send TLS retry with no POST versus uncertain response/code rejection;
+MQTT tests prove TLS failure does not consume the one-time marker. The **3 CA
+hook Python tests passed**. The full native runner reported Windows WinError
+32/5 only during final temporary-directory cleanup after all executables passed;
+this runner exit is not described as a clean PASS. Existing locked temp files
+were preserved; no broad cleanup was attempted.
+
+Home, secure and secure_smoke ESP32 builds passed. Read-only Sonar checked the
+changed Python runner and extracted portal HTML/JavaScript; actionable findings
+were fixed (accessible labels/language and equivalent polling initialization).
+Final supported snippets had no findings; C++ analysis is unavailable. The CA
+hook was unchanged, so previous missing-CA fail-closed evidence is retained.
+
+No device, serial, flash, deployment, reset, NVS or existing Stage 9 environment
+was accessed or changed. The physical TLS -9984 cause remains unknown without
+actual TIME/TLS output; none was supplied during this source-only task. Setup
+TLS failures now invoke the same lab diagnostics automatically. No physical
+setup/enrollment/MQTT PASS is claimed.
+
+Local build artifacts only: the pre-first-build binary for this increment was
+not separately backed up. Existing restoration artifacts were retained, and
+the intermediate smoke artifact was saved as
+`stage9-restoration/pre-setup-final-build-20261023.bin`, SHA256
+`2693bbe64a3f072a8858d6ba6752b443a3610695bda4f64166aff4ffc7594b8d`.
+This is not a device dump. A previous-source rollback remains available from
+`054782c` with the existing public CA; no installed device image was modified.
+
 ## Stage 9 enrollment TLS diagnostics — 2026-10-23
 
 The operator reported secure_smoke `65b1fd9` FLASH/boot/portal PASS, followed

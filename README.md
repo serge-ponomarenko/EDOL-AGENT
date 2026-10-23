@@ -55,9 +55,33 @@ fails the secure build. Building does not upload or contact EDOL.
 The secure setup form accepts an owner-issued code from the EDOL printer Agent
 page instead of manual agent ID/password. Enter the configured HTTPS DNS/IPv4
 host and port (secure default 443; previously stored ports stay unchanged).
-Saving joins the configured network and performs a single HTTPS enrollment.
-Failed/uncertain enrollment requires a fresh owner-issued code. Codes are not
-persisted; the issued identity is stored separately in `edol_agent_sec`, using
+Save & Reboot saves the settings and starts the automatic sequence in the
+existing portal: Wi-Fi → NTP → Core TLS → enrollment → MQTT credentials →
+MQTT TLS connection/subscriptions → reboot into normal operation. Progress and
+safe failure reasons appear on the same page; stay connected to the setup AP.
+There is no preliminary unpaired configuration or mandatory serial command.
+Network calls are bounded; the portal may pause responding for tens of seconds
+while a step reconnects Wi-Fi or waits for NTP/TLS/HTTP. Reconnect to the same AP if its Wi-Fi channel
+changes when the station joins the network, then reopen the existing page.
+
+Pre-send Wi-Fi/NTP/TLS failures retry every 15 seconds after completion. Use
+Retry saved settings without typing unchanged fields again. A new code is
+held only in RAM for at most five minutes from entry (the server's expiry may
+be earlier), and never prefilled or returned by status. Blank resubmission
+does not extend that window. Success, code rejection or an uncertain enrollment
+response clears it. An uncertain response/storage failure requires checking
+Agent status in EDOL and owner replacement if already enrolled; do not replay
+one-time requests. A power loss before enrollment loses only the pending code,
+not saved settings: enter a fresh code in the same form.
+
+With an existing identity, leave the code blank to change network/endpoints
+without replacing identity. An explicitly entered new owner code requests new
+enrollment. MQTT issuance failures after the request may have been sent require
+owner replacement; a persistent attempt marker is never reset automatically.
+After restart, that marker without a usable MQTT secret reopens the portal with
+an explicit replacement message. Temporary TLS failure before sending the
+request does not consume the marker. Existing identities and all NVS keys are
+retained; the issued identity is stored separately in `edol_agent_sec`, using
 a final commit marker. Existing Home keys in `edol_config` are unchanged.
 Secure uploads use fixed v1 routes and the issued credential, never the Home
 agent ID. Redirects and plaintext fallback are disabled for enrollment.
@@ -119,7 +143,7 @@ git diff --check
 ```
 
 On Windows, `py -3` can replace `python`. Building Home first resolves the real
-ArduinoJson parser used by the enrollment host tests. Nine C++ executables
+ArduinoJson parser used by the enrollment host tests. Ten C++ executables
 exercise production Home upload/AgentService, credential storage, bounded
 enrollment and secure upload routing with fake sockets; they do not establish
 real TLS certificate behavior. The transport fake additionally checks clock

@@ -16,5 +16,6 @@ public:
     static bool clear();
     static bool loadMqtt(String &secret);
     static bool beginMqttProvisioning();
+    static bool mqttProvisioningAttempted();
     static bool saveMqtt(const char *secret);
 };
