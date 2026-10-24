@@ -7,9 +7,9 @@
 
 CommandProcessor::CommandProcessor(
     BambuMqttClient &bambuMqttClient,
-    AgentService &agentService)
+    AgentService &agentService, BulkTransferTask &transfers)
     : bambuMqttClient_(bambuMqttClient),
-      agentService_(agentService)
+      agentService_(agentService), transfers_(transfers)
 {
 }
 
@@ -165,15 +165,15 @@ void CommandProcessor::processUploadModelCommand(
         return;
     }
 
-    Serial.println("UPLOAD_MODEL started");
+    Serial.println("UPLOAD_MODEL request");
 
     bool success =
-        agentService_.uploadModel(
+        transfers_.request(
             fileName);
 
     Serial.printf(
         "UPLOAD_MODEL %s\n",
-        success ? "SUCCESS" : "FAILED");
+        success ? "QUEUED" : "REJECTED");
 }
 
 void CommandProcessor::processUploadSnapshotCommand(
@@ -182,14 +182,14 @@ void CommandProcessor::processUploadSnapshotCommand(
     (void)payloadNode;
 
     Serial.println(
-        "UPLOAD_SNAPSHOT started");
+        "UPLOAD_SNAPSHOT request");
 
     bool success =
-        agentService_.uploadSnapshot();
+        transfers_.request();
 
     Serial.printf(
         "UPLOAD_SNAPSHOT %s\n",
-        success ? "SUCCESS" : "FAILED");
+        success ? "QUEUED" : "REJECTED");
 }
 
 void CommandProcessor::processEnableSnapshotSchedulerCommand()

@@ -2,16 +2,22 @@
 #include "FtpReply.h"
 
 #include <Arduino.h>
+#include <cerrno>
+#include <climits>
+#include "../util/BulkAdmission.h"
 
 #include "../config/ConfigManager.h"
 
 bool FtpsClient::connect()
 {
     disconnect();
+    if (!bulkAdmission("ftps-control")) return fail("MEMORY_ADMISSION");
 
     control_.setInsecure();
     data_.setInsecure();
 
+    control_.setHandshakeTimeout(10);
+    data_.setHandshakeTimeout(10);
     control_.setTimeout(10);
     data_.setTimeout(10);
 
@@ -90,6 +96,7 @@ bool FtpsClient::openDataConnection(const PassiveEndpoint &endpoint)
 {
     data_.stop();
 
+    if (!bulkAdmission("ftps-data")) return fail("MEMORY_ADMISSION");
     if (!data_.connect(endpoint.ip, endpoint.port))
     {
         Serial.println("Data connection failed");
@@ -153,15 +160,22 @@ bool FtpsClient::getFileSize(
         return false;
     }
 
-    size = atol(
-        lastReply_.substring(4).c_str());
-
+    String number = lastReply_.substring(4);
+    if (number.length() == 0) return fail("SIZE_PARSE");
+    for (size_t i = 0; i < number.length(); ++i)
+        if (number.c_str()[i] < '0' || number.c_str()[i] > '9') return fail("SIZE_PARSE");
+    errno = 0;
+    char *end = nullptr;
+    unsigned long parsed = strtoul(number.c_str(), &end, 10);
+    if (errno == ERANGE || !end || *end || parsed == 0 || parsed > 32UL * 1024 * 1024)
+        return fail("SIZE_LIMIT");
+    size = static_cast<size_t>(parsed);
     return true;
 }
 
 bool FtpsClient::downloadFile(
     const char *remoteFile,
-    Stream &output)
+    Stream &output, size_t expectedSize)
 {
     failure_ = "NONE";
     transferred_ = 0;
@@ -190,40 +204,34 @@ bool FtpsClient::downloadFile(
 
     uint8_t buffer[1024];
 
+    if (expectedSize == 0 || expectedSize > 32UL * 1024 * 1024) { disconnect(); return fail("SIZE_LIMIT"); }
     uint32_t lastData = millis();
-    while (data_.connected() || data_.available())
+    const uint32_t started = lastData;
+    while (transferred_ < expectedSize)
     {
-        while (data_.available())
+        if (millis() - started >= 120000) { disconnect(); return fail("TRANSFER_TIMEOUT"); }
+        const int available = data_.available();
+        if (available < 0) { disconnect(); return fail("DATA_READ"); }
+        if (available > 0)
         {
-            int bytesRead = data_.read(
-                buffer,
-                sizeof(buffer));
-
+            const size_t count = std::min(sizeof(buffer), expectedSize - transferred_);
+            int bytesRead = data_.read(buffer, count);
             if (bytesRead < 0) { disconnect(); return fail("DATA_READ"); }
             if (bytesRead > 0)
             {
-                lastData = millis();
-                size_t written =
-                    output.write(
-                        buffer,
-                        bytesRead);
-
-                if (written != static_cast<size_t>(bytesRead))
-                {
-                    Serial.println("Output stream write failed");
-                    disconnect();
-                    return fail("HTTP_STREAM_WRITE");
-                }
+                if (output.write(buffer, bytesRead) != static_cast<size_t>(bytesRead))
+                { disconnect(); return fail("HTTP_STREAM_WRITE"); }
                 transferred_ += static_cast<size_t>(bytesRead);
+                lastData = millis();
             }
-            else break;
         }
-
+        else if (!data_.connected()) { disconnect(); return fail("SIZE_MISMATCH"); }
         if (millis() - lastData >= 10000) { disconnect(); return fail("DATA_TIMEOUT"); }
-
         delay(1);
     }
-
+    // Never probe TLS read() after the declared payload. SDK available() may
+    // return a negative close/error value which used to enter while(available()).
+    if (data_.available() > 0) { disconnect(); return fail("SIZE_MISMATCH"); }
     data_.stop();
 
     code = readReply();

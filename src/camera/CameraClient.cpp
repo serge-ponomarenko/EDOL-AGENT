@@ -1,3 +1,4 @@
+#include "../util/BulkAdmission.h"
 #include "CameraClient.h"
 
 #include <Arduino.h>
@@ -17,6 +18,9 @@ bool CameraClient::connect()
 {
     client_.stop();
 
+    if (!bulkAdmission("camera")) return false;
+    client_.setHandshakeTimeout(10);
+    client_.setTimeout(10);
     client_.setInsecure();
 
     if (!client_.connect(ConfigManager::getBambuPrinterHost().c_str(), CAMERA_PORT))
@@ -157,11 +161,14 @@ bool CameraClient::streamSnapshot(
     std::function<bool(const uint8_t *, size_t)> handler)
 {
     uint32_t remaining = payloadSize;
+    if (remaining == 0 || remaining > 256 * 1024) return false;
+    const uint32_t started = millis();
 
     uint8_t buffer[1024];
 
     while (remaining > 0)
     {
+        if (millis() - started >= 30000) return false;
         uint32_t waitStart = millis();
 
         while (client_.available() == 0)
@@ -191,7 +198,7 @@ bool CameraClient::streamSnapshot(
                 buffer,
                 chunkSize);
 
-        if (bytesRead < 0)
+        if (bytesRead <= 0)
         {
             Serial.println("JPEG read failed");
             return false;

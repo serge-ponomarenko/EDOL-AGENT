@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../mqtt/BambuMqttClient.h"
-#include "../agent/AgentService.h"
+#include "../agent/BulkTransferTask.h"
 
 #include <ArduinoJson.h>
 
@@ -10,7 +10,7 @@ class CommandProcessor
 public:
     CommandProcessor(
         BambuMqttClient &bambuMqttClient,
-        AgentService &agentService);
+        AgentService &agentService, BulkTransferTask &transfers);
 
         void initialize();
 
@@ -40,6 +40,7 @@ private:
 
     BambuMqttClient &bambuMqttClient_;
     AgentService &agentService_;
+    BulkTransferTask &transfers_;
 
     String printerCommandTopic_;
     String agentCommandTopic_;

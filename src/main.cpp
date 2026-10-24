@@ -39,9 +39,11 @@ AgentService agentService(
     eventPublisher,
     bambuMqttClient);
 
+BulkTransferTask bulkTransfers(agentService);
+
 CommandProcessor commandProcessor(
     bambuMqttClient,
-    agentService);
+    agentService, bulkTransfers);
 
 MessageBridge messageBridge(
     edolMqttClient,
@@ -78,6 +80,7 @@ void processSmokeConsole()
         if (overflow) Serial.println("SMOKE command rejected: too long");
         else if (strcmp(command, "STATUS") == 0)
             Serial.printf("SMOKE wifi=%u setup=%u\n", wifiManager.isConnected(), setupMode);
+        else if (bulkTransfers.busy()) Serial.println("SMOKE command deferred: bulk operation active");
         else if (strcmp(command, "TIME") == 0)
         {
             SecureTransport::synchronizeClock();
@@ -95,7 +98,7 @@ void processSmokeConsole()
         else if (setupMode || !wifiManager.isConnected())
             Serial.println("SMOKE upload unavailable: setup or WiFi offline");
         else if (strcmp(command, "SNAPSHOT") == 0)
-            Serial.printf("SMOKE snapshot=%s\n", agentService.uploadSnapshot() ? "PASS" : "FAIL");
+            Serial.printf("SMOKE snapshot=%s\n", bulkTransfers.request() ? "QUEUED" : "REJECTED");
         else if (strncmp(command, "MODEL ", 6) == 0)
         {
             const char *name = command + 6;
@@ -103,7 +106,7 @@ void processSmokeConsole()
             for (const char *cursor = name; *cursor; ++cursor)
                 valid = valid && ((*cursor >= 'a' && *cursor <= 'z') || (*cursor >= 'A' && *cursor <= 'Z')
                     || (*cursor >= '0' && *cursor <= '9') || *cursor == '.' || *cursor == '_' || *cursor == '-');
-            if (valid) Serial.printf("SMOKE model=%s\n", agentService.uploadModel(name) ? "PASS" : "FAIL");
+            if (valid) Serial.printf("SMOKE model=%s\n", bulkTransfers.request(name) ? "QUEUED" : "REJECTED");
             else Serial.println("SMOKE model rejected: use a plain ASCII basename");
         }
         else Serial.println("SMOKE commands: STATUS, TIME, TLS, SNAPSHOT, MODEL <basename>, SETUP");
@@ -145,6 +148,7 @@ void setup()
     ConfigManager::begin();
     ledService.begin();
     commandProcessor.initialize();
+    agentService.setSnapshotRequest([]() { bulkTransfers.request(); });
 
     if (factoryResetDetector.shouldFactoryReset())
     {
@@ -275,11 +279,15 @@ void loop()
         bambuMqttClient.loop();
         edolMqttClient.loop();
 
+        if (bambuMqttClient.isConnected() && edolMqttClient.isConnected()) bulkTransfers.begin();
         agentService.processSnapshotScheduler();
 
         heartbeatService.loop();
     }
 
+    // Expire/retry events and release completed operations even after Wi-Fi loss.
+    eventPublisher.drain();
+    if (!eventPublisher.hasPending()) bulkTransfers.collect();
     ledService.process();
 
     delay(10);

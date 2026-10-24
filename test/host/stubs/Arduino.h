@@ -16,6 +16,8 @@ public:
     String(unsigned value) : value_(std::to_string(value)) {}
     const char *c_str() const { return value_.c_str(); }
     size_t length() const { return value_.size(); }
+    size_t write(uint8_t value) { value_ += static_cast<char>(value); return 1; }
+    size_t write(const uint8_t *data, size_t count) { value_.append(reinterpret_cast<const char *>(data), count); return count; }
     void trim()
     {
         auto end = value_.find_last_not_of(" \r\n\t");
@@ -66,10 +68,12 @@ struct FakeSerial
 };
 
 extern FakeSerial Serial;
+inline uint32_t &fakeFreeHeap() { static uint32_t value = 200000; return value; }
+inline uint32_t &fakeLargestBlock() { static uint32_t value = 100000; return value; }
 struct FakeEsp
 {
-    uint32_t getFreeHeap() const { return 200000; }
-    uint32_t getMaxAllocHeap() const { return 100000; }
+    uint32_t getFreeHeap() const { return fakeFreeHeap(); }
+    uint32_t getMaxAllocHeap() const { return fakeLargestBlock(); }
 };
 #define ESP FakeEsp()
 extern uint32_t fakeMillis;

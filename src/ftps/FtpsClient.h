@@ -26,7 +26,7 @@ public:
 
     bool downloadFile(
         const char *remoteFile,
-        Stream &output);
+        Stream &output, size_t expectedSize);
 
     void disconnect();
     const char *lastFailure() const { return failure_; }

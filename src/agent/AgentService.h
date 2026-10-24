@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <functional>
 #include "../ftps/FtpsClient.h"
 #include "../http/HttpUploadClient.h"
 #include "../camera/CameraClient.h"
@@ -45,6 +47,7 @@ public:
     void processSnapshotScheduler();
 
     bool isCameraHealthy() const;
+    void setSnapshotRequest(std::function<void()> request) { snapshotRequest_ = request; }
 
 private:
     bool connectToPrinter();
@@ -54,11 +57,10 @@ private:
     CameraClient &cameraClient_;
     AgentEventPublisher &eventPublisher_;
     BambuMqttClient &printerTelemetry_;
-    bool pausePrinterTelemetry();
-    void resumePrinterTelemetry(bool wasConnected);
+    std::function<void()> snapshotRequest_;
 
     uint32_t lastSnapshotMillis_ = 0;
-    bool lastSnapshotSuccess_ = false;
+    std::atomic<bool> lastSnapshotSuccess_{false};
     bool snapshotSchedulerEnabled_ = false;
 
     AgentOperation currentOperation_ = AgentOperation::NONE;

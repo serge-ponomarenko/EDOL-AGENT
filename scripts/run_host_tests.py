@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 
 UPLOAD_SOURCE = "src/http/HttpUploadClient.cpp"
+EDOL_MQTT_SOURCE = "src/mqtt/EdolMqttClient.cpp"
 
 
 def test_inputs(root, name, production_source, secure):
@@ -15,12 +16,16 @@ def test_inputs(root, name, production_source, secure):
         sources.append(root / production_source)
     if secure and production_source:
         sources.append(root / "src/security/SecureIpClient.cpp")
+    if name == "bulk_task":
+        sources.extend([root / "src/mqtt/BambuMqttClient.cpp", root / EDOL_MQTT_SOURCE, root / "src/mqtt/AgentEventPublisher.cpp"])
     if name == "tls_lifecycle":
         sources.extend([root / "src/security/SecureTransport.cpp", root / "src/security/AgentEnrollmentClient.cpp"])
     extra_includes = []
-    if name == "ftps":
+    if name == "bulk_task":
+        extra_includes.append(root / "test/bulk/stubs")
+    if name in ("ftps", "camera"):
         extra_includes.append(root / "test/ftps/stubs")
-    if name in ("enrollment", "mqtt_enrollment", "tls_lifecycle"):
+    if name in ("enrollment", "mqtt_enrollment", "tls_lifecycle", "bulk_task"):
         library = root / ".pio/libdeps/lolin_d32/ArduinoJson/src"
         if not library.is_dir():
             raise RuntimeError("Build lolin_d32 first to resolve the real ArduinoJson parser for enrollment tests")
@@ -66,6 +71,10 @@ def run_test(root, name, production_source, secure=False, smoke=False):
 
 def main():
     root = Path(__file__).resolve().parents[1]
+    run_test(root, "transfer_mailbox", None)
+    run_test(root, "bulk_task", "src/agent/BulkTransferTask.cpp")
+    run_test(root, "bulk_task", "src/agent/BulkTransferTask.cpp", secure=True)
+    run_test(root, "camera", "src/camera/CameraClient.cpp")
     run_test(root, "upload", UPLOAD_SOURCE)
     run_test(root, "agent", "src/agent/AgentService.cpp")
     run_test(root, "agent", "src/agent/AgentService.cpp", secure=True)
@@ -73,8 +82,8 @@ def main():
     run_test(root, "secure_upload", UPLOAD_SOURCE, secure=True)
     run_test(root, "enrollment", "src/security/AgentEnrollmentClient.cpp", secure=True)
     run_test(root, "mqtt_enrollment", "src/security/AgentMqttEnrollmentClient.cpp", secure=True)
-    run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp")
-    run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp", secure=True)
+    run_test(root, "mqtt", EDOL_MQTT_SOURCE)
+    run_test(root, "mqtt", EDOL_MQTT_SOURCE, secure=True)
     run_test(root, "secure_transport", "src/security/SecureTransport.cpp", secure=True, smoke=True)
     run_test(root, "tls_lifecycle", UPLOAD_SOURCE, secure=True, smoke=True)
     run_test(root, "provisioning", None, secure=True)

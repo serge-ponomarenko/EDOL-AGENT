@@ -9,6 +9,7 @@
 class HttpUploadClient : public Stream
 {
 public:
+    bool prepare();
     bool begin(
         const char *fileName,
         size_t contentLength);
@@ -42,6 +43,7 @@ private:
     size_t contentLength_ = 0;
 
     bool writeFailed_ = false;
+    bool prepared_ = false;
 
     bool connect(size_t contentLength);
 

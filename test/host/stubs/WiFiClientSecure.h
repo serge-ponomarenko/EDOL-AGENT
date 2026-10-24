@@ -52,6 +52,7 @@ protected:
 public:
     const char *rootCA = nullptr;
     unsigned timeoutSeconds = 0;
+    void setInsecure() {}
     void setCACert(const char *certificate) { rootCA = certificate; }
     void setHandshakeTimeout(unsigned long) {}
     void setTimeout(unsigned long seconds) {

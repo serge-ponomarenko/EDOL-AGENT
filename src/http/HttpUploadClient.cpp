@@ -1,3 +1,4 @@
+#include "../util/BulkAdmission.h"
 #include "HttpUploadClient.h"
 
 #include <Arduino.h>
@@ -129,9 +130,29 @@ bool HttpUploadClient::beginSnapshotUpload(
     return true;
 }
 
+bool HttpUploadClient::prepare()
+{
+    if (!connect(0)) return false;
+    prepared_ = true;
+    return true;
+}
+
 bool HttpUploadClient::connect(size_t contentLength)
 {
+    if (prepared_)
+    {
+        prepared_ = false;
+        uploadedBytes_ = 0;
+        contentLength_ = contentLength;
+        writeFailed_ = false;
+        if (client_.connected()) return true;
+        abort();
+        return false; // Never restart EDOL verification under LAN TLS pressure.
+    }
     abort();
+#if EDOL_AGENT_SECURE_BUILD
+    if (!bulkAdmission("https")) return false;
+#endif
     uploadedBytes_ = 0;
     contentLength_ = contentLength;
     writeFailed_ = false;
@@ -163,6 +184,7 @@ bool HttpUploadClient::connect(size_t contentLength)
 
 void HttpUploadClient::abort()
 {
+    prepared_ = false;
     client_.stop();
 }
 

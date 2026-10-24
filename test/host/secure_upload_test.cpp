@@ -39,6 +39,17 @@ int main()
     assert(upload.write(image, sizeof(image)) == sizeof(image));
     assert(upload.finish());
     socketState = FakeSocket{};
+    assert(upload.prepare());
+    assert(socketState.connected && socketState.headers.empty());
+    socketState.connectOk = false; // begin must reuse, not reconnect under LAN TLS pressure.
+    assert(upload.begin("part.3mf", 3));
+    assert(upload.write(image, 3) == 3 && upload.finish());
+    socketState = FakeSocket{};
+    assert(upload.prepare());
+    socketState.connected = false;
+    assert(!upload.begin("part.3mf", 3));
+    assert(socketState.headers.empty()); // No fallback reconnect after losing the prepared socket.
+    socketState = FakeSocket{};
     paired = false;
     assert(!upload.begin("part.3mf", 1));
     assert(!socketState.connected && socketState.headers.empty());
@@ -50,5 +61,10 @@ int main()
     socketState.connectOk = false;
     assert(!upload.begin("part.3mf", 1));
     assert(socketState.headers.empty());
+    socketState = FakeSocket{};
+    fakeFreeHeap() = 32767;
+    assert(!upload.prepare());
+    assert(!socketState.connected && socketState.headers.empty());
+    fakeFreeHeap() = 200000;
     std::cout << "Secure upload routing and fail-closed tests passed (fake sockets, no TLS acceptance)\n";
 }

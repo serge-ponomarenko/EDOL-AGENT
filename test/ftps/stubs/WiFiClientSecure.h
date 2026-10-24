@@ -5,7 +5,7 @@
 struct FtpSocketFixture
 {
     bool connectOk = true, connected = false, closeWithBufferedData = false;
-    bool negativeRead = false;
+    bool negativeRead = false, negativeEof = false;
     std::string input, commands;
     size_t position = 0;
 };
@@ -28,6 +28,7 @@ public:
     WiFiClientSecure() : fixture_(ftpSocketCount++ % 2 == 0 ? ftpControl : ftpData) {}
     void setInsecure() {}
     void setTimeout(unsigned long) {}
+    void setHandshakeTimeout(unsigned long) {}
     bool connect(const char *, uint16_t) { fixture_.connected = fixture_.connectOk; return fixture_.connectOk; }
     bool connect(IPAddress, uint16_t)
     {
@@ -35,7 +36,7 @@ public:
         return fixture_.connectOk;
     }
     bool connected() const { return fixture_.connected; }
-    int available() const { return static_cast<int>(fixture_.input.size() - fixture_.position); }
+    int available() const { if (fixture_.negativeEof && fixture_.position == fixture_.input.size()) return -1; return static_cast<int>(fixture_.input.size() - fixture_.position); }
     int read()
     {
         if (fixture_.negativeRead) return -1;

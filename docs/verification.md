@@ -413,3 +413,80 @@ Before builds, the prior smoke artifact was preserved as ignored
 `03f262360cebc75f657a15029d74a3ceda65f32accbdbe76812a727b788aa3fc`.
 This is a build artifact, not a flash dump. Existing restoration files remain
 untouched. Rollback requires separate approval and never resets NVS/identity.
+
+## Continuous MQTT / completion regression (source increment after 8db73079)
+
+This section supersedes the historical MQTT-pause assertions above. No new
+source was flashed and no physical acceptance is claimed.
+
+Production ownership is now explicit: only the main loop touches Bambu/EDOL
+MQTT; one low-priority worker owns camera/FTPS/HTTP. The production-backed
+bulk-task test uses both real MQTT wrappers and the real event publisher with
+offline PubSubClient/socket fixtures. While bulk I/O is blocked, it runs 1000
+loops on each connection, forwards 1000 telemetry messages and 1000 commands,
+checks both connections remain established and forbids worker-thread MQTT
+access and recursive loop processing. This runs in Home and secure modes.
+It also checks event retention across disconnect, recovery, three-attempt
+publish bounds, one-second retry spacing and 60-second expiry. These establish
+software scheduling/ownership, not actual device keepalive or heap capacity.
+
+FTPS tests compile the production implementation, not a predetermined transfer
+result. They include the Unicode filename and a synthetic 37,722-byte payload:
+exact SIZE bytes are read but only 37,721 reach the HTTP-like sink until final
+226 is checked and the held tail committed. Final 426 never commits the tail.
+Negative TLS EOF after the payload, buffered EOF, invalid SIZE/overflow,
+truncation/excess, preliminary/final reply failures, read/write/timeout failures
+and fragmented-heap admission are covered. No real model contents are used.
+The production camera test covers frame/count bounds, read/stream failure and
+timeout. Secure HTTP tests cover prepared TLS reuse, lost prepared connection
+without fallback reconnect, identity/trust failure and low-memory rejection.
+
+### Actual targeted results
+
+| Check | Result |
+| --- | --- |
+| Native configurations below | 12 distinct configurations: assertions PASS |
+| transfer_mailbox runner exit | Windows WinError 32/5 during temp cleanup after assertions; not a clean runner PASS |
+| bulk_task Home/secure, upload, secure_upload, agent Home/secure, FTPS, camera, MQTT Home/secure, TLS lifecycle secure+smoke | PASS |
+| Exact audited vendor verifier | 16 real certificate controls PASS, allocation-fault regression PASS, three rejection/recovery cycles PASS |
+| Home / secure / secure_smoke PlatformIO | Three SUCCESS; static RAM/flash reporting is not runtime heap-margin proof |
+| Selected backend checks | 38 PASS, zero failures/errors/skips; no Docker or DB checks selected |
+| Dashboard JavaScript | 5 PASS, zero failures/skips |
+| Device, real JPEG/model, actual command execution | NOT RUN |
+
+The selected suite does not claim a full native runner, full Maven reactor or
+hardware acceptance. Initial MSVC strcpy/link fixtures and one Mockito generic/
+MockMvc invocation expectation were fixed; the final selected checks passed.
+The known Windows temp cleanup issue remains distinct from assertions/compile.
+The native runner now includes the new tests for future full-suite execution.
+
+From this worktree, native checks were invoked with the existing run_test helper
+and absolute resolved root; for example:
+
+```powershell
+py -c "from pathlib import Path; from scripts.run_host_tests import run_test; run_test(Path.cwd().resolve(),'bulk_task','src/agent/BulkTransferTask.cpp')"
+py -c "from pathlib import Path; from scripts.run_host_tests import run_test; run_test(Path.cwd().resolve(),'bulk_task','src/agent/BulkTransferTask.cpp',secure=True)"
+py -c "from pathlib import Path; from scripts.run_host_tests import run_test; run_test(Path.cwd().resolve(),'ftps','src/ftps/FtpsClient.cpp')"
+py scripts/run_ip_san_tests.py --mbedtls-source .pio/ip-san-vendor/mbedtls-2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9 --openssl "C:/Program Files/Git/usr/bin/openssl.exe"
+pio run -e lolin_d32
+pio run -e lolin_d32_secure
+pio run -e lolin_d32_secure_smoke
+```
+
+The same helper selected: transfer_mailbox/None, upload/HttpUploadClient.cpp,
+secure_upload/HttpUploadClient.cpp secure, agent/AgentService.cpp Home+secure,
+camera/CameraClient.cpp, mqtt/EdolMqttClient.cpp Home+secure and
+tls_lifecycle/HttpUploadClient.cpp secure+smoke. Paths above are under src/
+with their normal component directories. Secure builds reused the existing
+worktree-local public CA through EDOL_AGENT_ROOT_CA_FILE; no CA content was
+printed, committed or changed. Local fixture/cache access required bounded
+sandbox escalation where the native tools reported permissions.
+
+The read-only Sonar analyzer supports the modified Python runner (no findings)
+but not C++. Backend Java/HTML/JS results, memory floor/design comparison,
+operator retest and rollback are recorded in the backend Stage 9 hardware
+remediation runbook. EDOL trust/signature/time/IP checks are unchanged.
+Two actual snapshots with continuous MQTT and five-session model capacity are
+**unproven**. Reject the workload cleanly if it cannot fit; never disconnect
+MQTT or bypass TLS as a fallback. Full-image RAM/flash staging and SDK buffer
+changes were not introduced. Existing restoration artifacts are untouched.

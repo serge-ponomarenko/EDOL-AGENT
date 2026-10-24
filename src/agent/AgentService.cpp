@@ -5,6 +5,7 @@
 #include "../config/Config.h"
 #include "../config/ConfigManager.h"
 #include "../util/ScopeExit.h"
+#include "../util/DeferredTailStream.h"
 
 AgentService::AgentService(
     FtpsClient &ftpsClient,
@@ -18,34 +19,6 @@ AgentService::AgentService(
       eventPublisher_(eventPublisher),
       printerTelemetry_(printerTelemetry)
 {
-}
-
-bool AgentService::pausePrinterTelemetry()
-{
-#if EDOL_AGENT_SECURE_BUILD
-    bool connected = printerTelemetry_.isConnected();
-    if (connected)
-    {
-        printerTelemetry_.disconnect();
-        Serial.println("Printer telemetry paused for secure bulk transfer");
-    }
-#if EDOL_AGENT_SMOKE_BUILD
-    SecureTransport::reportMemory("bulk-after-telemetry-pause");
-#endif
-    return connected;
-#else
-    return false;
-#endif
-}
-
-void AgentService::resumePrinterTelemetry(bool wasConnected)
-{
-#if EDOL_AGENT_SECURE_BUILD
-    if (wasConnected && !printerTelemetry_.connect())
-        Serial.println("Printer telemetry reconnect pending; normal loop will retry");
-#else
-    (void)wasConnected;
-#endif
 }
 
 void AgentService::enableSnapshotScheduler()
@@ -99,9 +72,6 @@ bool AgentService::uploadModel(
 {
     if (currentOperation_ != AgentOperation::NONE)
     {
-        eventPublisher_.publishModelUploadFailed(
-            fileName,
-            "OPERATION_IN_PROGRESS");
 
         Serial.println(
             "Another operation already in progress");
@@ -112,11 +82,9 @@ bool AgentService::uploadModel(
     currentOperation_ =
         AgentOperation::MODEL_UPLOAD;
 
-    const bool resumeTelemetry = pausePrinterTelemetry();
     auto cleanup = [&]() {
         uploadClient_.abort();
         ftpsClient_.disconnect();
-        resumePrinterTelemetry(resumeTelemetry);
         currentOperation_ = AgentOperation::NONE;
     };
     ScopeExit<decltype(cleanup)> cleanupGuard(cleanup);
@@ -124,6 +92,14 @@ bool AgentService::uploadModel(
     eventPublisher_.publishModelUploadStarted(
         fileName);
 
+#if EDOL_AGENT_SECURE_BUILD
+    // Verify EDOL before adding camera/FTPS TLS state and its transient peaks.
+    if (!uploadClient_.prepare())
+    {
+        eventPublisher_.publishModelUploadFailed(fileName, "UPLOAD_PREPARE_FAILED");
+        return false;
+    }
+#endif
     if (!connectToPrinter())
     {
         eventPublisher_.publishModelUploadFailed(
@@ -166,9 +142,10 @@ bool AgentService::uploadModel(
         return false;
     }
 
+    DeferredTailStream staged(uploadClient_);
     if (!ftpsClient_.downloadFile(
             fileName.c_str(),
-            uploadClient_))
+            staged, fileSize))
     {
         char reason[64];
         snprintf(reason, sizeof(reason), "DOWNLOAD_FAILED:%s", ftpsClient_.lastFailure());
@@ -183,14 +160,17 @@ bool AgentService::uploadModel(
         return false;
     }
 
-    bool uploadSuccess =
-        uploadClient_.finish();
+    Serial.printf("Model transfer verified: expected=%u transferred=%u ftp_code=%d\n",
+                  static_cast<unsigned>(fileSize), static_cast<unsigned>(ftpsClient_.transferredBytes()),
+                  ftpsClient_.lastReplyCode());
+    ftpsClient_.disconnect();
+    bool uploadSuccess = staged.commit() && uploadClient_.finish();
 
     if (!uploadSuccess)
     {
         eventPublisher_.publishModelUploadFailed(
             fileName,
-            "HTTP_UPLOAD_FAILED");
+            "HTTP_UPLOAD_FAILED_OR_UNCONFIRMED");
 
         return false;
     }
@@ -218,16 +198,17 @@ bool AgentService::uploadSnapshot()
 
     currentOperation_ =
         AgentOperation::SNAPSHOT_UPLOAD;
-    const bool resumeTelemetry = pausePrinterTelemetry();
     auto cleanup = [&]() {
         uploadClient_.abort();
         cameraClient_.disconnect();
-        resumePrinterTelemetry(resumeTelemetry);
         currentOperation_ = AgentOperation::NONE;
     };
     ScopeExit<decltype(cleanup)> cleanupGuard(cleanup);
 
     lastSnapshotSuccess_ = false;
+#if EDOL_AGENT_SECURE_BUILD
+    if (!uploadClient_.prepare()) return false;
+#endif
     if (!cameraClient_.connect())
     {
         return false;
@@ -267,6 +248,7 @@ bool AgentService::uploadSnapshot()
                            len) == len;
             });
 
+    cameraClient_.disconnect();
     uploadSuccess = uploadSuccess && uploadClient_.finish();
 
     lastSnapshotSuccess_ = uploadSuccess;
@@ -294,7 +276,7 @@ void AgentService::processSnapshotScheduler()
 
     lastSnapshotMillis_ = millis();
 
-    uploadSnapshot();
+    if (snapshotRequest_) snapshotRequest_();
 }
 
 bool AgentService::isCameraHealthy() const

@@ -237,13 +237,37 @@ failed with an explicit TLS allocation error while opening FTPS data. The exact
 vendor verifier reproduces leaf-only NOT_TRUSTED when a signature-verification
 allocation fails, even with a correct CA and unchanged leaf.
 
-Secure snapshot/model operations now temporarily disconnect only printer MQTT,
-freeing its TLS heap before opening the bulk clients. On all success/failure
-paths the bulk clients close before printer MQTT is reconnected. If reconnect
-fails, the normal main loop retries; settings and identity are retained. This
-introduces a telemetry interruption during secure transfers. EDOL MQTT is not
-intentionally disconnected; existing synchronous-transfer/keepalive limits
-still apply. Home does not pause its printer MQTT connection.
+The current source supersedes the MQTT-pause workaround: neither established
+MQTT session is deliberately disconnected for a transfer. Both clients and
+all MQTT callbacks/publishes belong to the main loop. One low-priority task
+owns camera/FTPS/HTTPS, including blocking handshakes. Requests copy at most
+255 filename bytes; one active transfer and one coalesced pending model are
+allowed. Snapshots never queue. Models outrank snapshots; all completions have
+a 15-second cooldown. The worker starts only after both MQTT clients connect;
+failed worker allocation is retried at most every 30 seconds. Model events use
+a three-entry handoff to the MQTT owner, retain disconnected outcomes, retry
+at most three times one second apart and expire after 60 seconds. New bulk
+work waits for this queue to drain; it cannot grow through repeated transfers.
+
+Secure transfers prepare and verify HTTPS before opening camera or FTPS TLS,
+then reuse that connection after the source length is known. They never
+reconnect HTTPS under LAN TLS pressure. The admission check uses the SDK TLS
+record-buffer sizes and both total free heap and largest block; it is a necessary
+floor, not a calibrated certificate/signature peak allowance. Allocation or
+verification failure rejects the transfer and releases bulk resources. The
+maximum streaming overlap remains four TLS sessions for snapshots and five
+for models. Two real snapshots with continuous MQTT have **NOT RUN**; this
+source does not establish that the hardware can sustain either workload.
+
+Model transfer validates SIZE (positive, at most 32 MiB), exact byte count,
+RETR 125/150 and final 226 before releasing the last HTTP body byte. A negative
+TLS EOF after the full payload is not treated as another data chunk; an early
+read error, size mismatch or missing completion still fails. HTTP status must
+confirm success. A lost HTTP acknowledgement remains uncertain. Camera frames
+are bounded to 256 KiB and 30 seconds, model data to 120 seconds, idle I/O and
+TLS handshakes to ten seconds. No file is staged in RAM or flash; buffers remain
+1 KiB plus the held tail byte. Identity, NVS, partitions and LAN trust policy
+are unchanged. See docs/verification.md for actual checks and limits.
 
 A common TLS socket wrapper also preserves descriptor -1 after SDK cleanup for
 camera, FTPS and printer MQTT, correcting the remaining LAN descriptor-0 errors.
@@ -252,7 +276,9 @@ verification limitations are unchanged; verified EDOL TLS is not weakened.
 Lab diagnostics add host/port and heap/largest-block observations to the existing
 certificate-depth/fingerprint output. These are diagnostics, not acceptance.
 
-Build/flash only after operator approval, using the same CA and paired identity.
-The next physical gate is one TLS probe and exactly two sequential SNAPSHOT
-commands with HTTP 200 and a genuinely updating dashboard image. Stop on another
-trust/allocation failure; do not proceed to revoke/re-pair until camera passes.
+Local builds are authorized; deployment/flash and each physical operation need
+separate operator approval. The next physical gate requires two sequential
+snapshots, waiting for completion plus the 15-second cooldown, with HTTP 200,
+real dashboard image refresh and continuously connected/serviced MQTT. The
+smoke console reports QUEUED/REJECTED immediately and a separate bulk completion;
+QUEUED is never upload PASS. Stop on resource/trust failure and retain identity.

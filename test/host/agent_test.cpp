@@ -5,21 +5,21 @@
 
 FakeSerial Serial;
 FakeSocket socketState;
+FakeMqttState mqttState;
 uint32_t fakeMillis = 0;
 
 enum class Failure { NONE, CONNECT, LOGIN, PROTECTION, DIRECTORY, SIZE, BEGIN, STREAM, FINISH, AUTH, FRAME };
 Failure failure = Failure::NONE;
 unsigned ftpStops = 0, cameraStops = 0, httpStops = 0, finishes = 0;
 unsigned completed = 0, failed = 0;
+size_t httpBytes = 0;
 bool telemetryConnected = true, reconnectOk = true;
 bool ftpLive = false, cameraLive = false, httpLive = false;
 unsigned telemetryPauses = 0, telemetryResumes = 0;
 
 void assertTransferBudget()
 {
-#if EDOL_AGENT_SECURE_BUILD
-    assert(!telemetryConnected);
-#endif
+    assert(telemetryConnected);
 }
 
 BambuMqttClient::BambuMqttClient() = default;
@@ -46,14 +46,21 @@ bool FtpsClient::login() { return failure != Failure::LOGIN; }
 bool FtpsClient::initializeProtection() { return failure != Failure::PROTECTION; }
 bool FtpsClient::changeDirectory(const char *) { return failure != Failure::DIRECTORY; }
 bool FtpsClient::getFileSize(const char *, size_t &size) { size = 3; return failure != Failure::SIZE; }
-bool FtpsClient::downloadFile(const char *, Stream &) { return failure != Failure::STREAM; }
+bool FtpsClient::downloadFile(const char *, Stream &out, size_t size) {
+    assert(size == 3);
+    const uint8_t bytes[] = {1, 2, 3};
+    assert(out.write(bytes, 3) == 3);
+    assert(httpBytes == 2); // Core cannot accept before FTP completion.
+    return failure != Failure::STREAM;
+}
 void FtpsClient::disconnect() { ++ftpStops; ftpLive = false; }
 
-bool HttpUploadClient::begin(const char *, size_t) { assertTransferBudget(); httpLive = failure != Failure::BEGIN; return httpLive; }
+bool HttpUploadClient::prepare() { assertTransferBudget(); httpLive = true; return true; }
+bool HttpUploadClient::begin(const char *, size_t) { assertTransferBudget(); httpBytes = 0; httpLive = failure != Failure::BEGIN; return httpLive; }
 bool HttpUploadClient::beginSnapshotUpload(const char *, size_t) { return begin(nullptr, 0); }
-size_t HttpUploadClient::write(const uint8_t *, size_t count) { return count; }
-size_t HttpUploadClient::write(uint8_t) { return 1; }
-bool HttpUploadClient::finish(uint16_t) { ++finishes; return failure != Failure::FINISH; }
+size_t HttpUploadClient::write(const uint8_t *, size_t count) { httpBytes += count; return count; }
+size_t HttpUploadClient::write(uint8_t) { ++httpBytes; return 1; }
+bool HttpUploadClient::finish(uint16_t) { assert(!ftpLive && !cameraLive); ++finishes; return failure != Failure::FINISH; }
 void HttpUploadClient::abort() { ++httpStops; httpLive = false; }
 
 bool CameraClient::connect() { assertTransferBudget(); cameraLive = failure != Failure::CONNECT; return cameraLive; }
@@ -103,16 +110,6 @@ int main()
         assert(agent.uploadSnapshot());
         assert(agent.isCameraHealthy());
     }
-#if EDOL_AGENT_SECURE_BUILD
-    assert(telemetryPauses > 0 && telemetryPauses == telemetryResumes);
-    reconnectOk = false;
-    assert(agent.uploadSnapshot());
-    assert(!telemetryConnected); // Normal main loop retries; never reset identity/settings.
-    unsigned resumes = telemetryResumes;
-    assert(agent.uploadModel("example.3mf"));
-    assert(telemetryResumes == resumes); // Do not reconnect an already-offline link inside a transfer.
-#else
     assert(telemetryPauses == 0 && telemetryResumes == 0 && telemetryConnected);
-#endif
     std::cout << "PASS: model/snapshot failure paths, HTTP health, resource and operation release\n";
 }
