@@ -2,11 +2,11 @@
 
 #include "SecureConfig.h"
 #if EDOL_AGENT_SECURE_BUILD
-#include <WiFiClientSecure.h>
+#include "../util/SocketTlsClient.h"
 
 namespace SecureTransport
 {
-class Client : public WiFiClientSecure
+class Client : public SocketTlsClient
 {
 public:
     int connect(const char *host, uint16_t port) override;
@@ -34,6 +34,7 @@ private:
 };
 #if EDOL_AGENT_SMOKE_BUILD
 void reportClock(const char *stage);
+void reportMemory(const char *stage);
 void reportFailure(Client &client, const char *stage, const char *host, uint16_t port);
 void probeCore();
 #endif

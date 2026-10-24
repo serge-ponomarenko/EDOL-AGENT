@@ -1,6 +1,6 @@
 #pragma once
 
-#include <WiFiClientSecure.h>
+#include "../util/SocketTlsClient.h"
 
 struct PassiveEndpoint
 {
@@ -46,9 +46,9 @@ private:
 
     bool openDataConnection(const PassiveEndpoint &endpoint);
 
-    WiFiClientSecure control_;
+    SocketTlsClient control_;
     String lastReply_;
-    WiFiClientSecure data_;
+    SocketTlsClient data_;
     const char *failure_ = "NONE";
     int replyCode_ = -1;
     size_t transferred_ = 0;

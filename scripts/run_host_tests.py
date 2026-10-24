@@ -68,6 +68,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     run_test(root, "upload", UPLOAD_SOURCE)
     run_test(root, "agent", "src/agent/AgentService.cpp")
+    run_test(root, "agent", "src/agent/AgentService.cpp", secure=True)
     run_test(root, "credential", "src/security/AgentCredentialStore.cpp")
     run_test(root, "secure_upload", UPLOAD_SOURCE, secure=True)
     run_test(root, "enrollment", "src/security/AgentEnrollmentClient.cpp", secure=True)

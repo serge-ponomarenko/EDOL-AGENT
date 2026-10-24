@@ -10,12 +10,42 @@ AgentService::AgentService(
     FtpsClient &ftpsClient,
     HttpUploadClient &uploadClient,
     CameraClient &cameraClient,
-    AgentEventPublisher &eventPublisher)
+    AgentEventPublisher &eventPublisher,
+    BambuMqttClient &printerTelemetry)
     : ftpsClient_(ftpsClient),
       uploadClient_(uploadClient),
       cameraClient_(cameraClient),
-      eventPublisher_(eventPublisher)
+      eventPublisher_(eventPublisher),
+      printerTelemetry_(printerTelemetry)
 {
+}
+
+bool AgentService::pausePrinterTelemetry()
+{
+#if EDOL_AGENT_SECURE_BUILD
+    bool connected = printerTelemetry_.isConnected();
+    if (connected)
+    {
+        printerTelemetry_.disconnect();
+        Serial.println("Printer telemetry paused for secure bulk transfer");
+    }
+#if EDOL_AGENT_SMOKE_BUILD
+    SecureTransport::reportMemory("bulk-after-telemetry-pause");
+#endif
+    return connected;
+#else
+    return false;
+#endif
+}
+
+void AgentService::resumePrinterTelemetry(bool wasConnected)
+{
+#if EDOL_AGENT_SECURE_BUILD
+    if (wasConnected && !printerTelemetry_.connect())
+        Serial.println("Printer telemetry reconnect pending; normal loop will retry");
+#else
+    (void)wasConnected;
+#endif
 }
 
 void AgentService::enableSnapshotScheduler()
@@ -82,9 +112,11 @@ bool AgentService::uploadModel(
     currentOperation_ =
         AgentOperation::MODEL_UPLOAD;
 
+    const bool resumeTelemetry = pausePrinterTelemetry();
     auto cleanup = [&]() {
         uploadClient_.abort();
         ftpsClient_.disconnect();
+        resumePrinterTelemetry(resumeTelemetry);
         currentOperation_ = AgentOperation::NONE;
     };
     ScopeExit<decltype(cleanup)> cleanupGuard(cleanup);
@@ -186,9 +218,11 @@ bool AgentService::uploadSnapshot()
 
     currentOperation_ =
         AgentOperation::SNAPSHOT_UPLOAD;
+    const bool resumeTelemetry = pausePrinterTelemetry();
     auto cleanup = [&]() {
         uploadClient_.abort();
         cameraClient_.disconnect();
+        resumePrinterTelemetry(resumeTelemetry);
         currentOperation_ = AgentOperation::NONE;
     };
     ScopeExit<decltype(cleanup)> cleanupGuard(cleanup);

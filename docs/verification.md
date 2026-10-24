@@ -344,3 +344,72 @@ Before builds, the prior smoke binary was preserved as ignored
 It is a local build artifact, not a dump of device flash. Rollback requires
 separate operator approval and preserves current identity/NVS/CA. No Stage 9
 runtime, database, authority, deployment, hardware or cleanup action occurred.
+
+## TLS memory-pressure regression
+
+### Mechanism and production change
+
+The exact audited Espressif mbedTLS source performs issuer signature verification
+in `x509_crt_check_signature`. `x509_crt_find_parent_in` treats a failed signature
+check, including allocator errors, as an unsuitable trusted CA candidate.
+`x509_crt_verify_chain` then emits NOT_TRUSTED when no parent remains. This can
+produce leaf depth 0 only, without expired/future/name flags, despite the correct
+CA and same leaf verifying when memory is available. The previous stop/sentinel
+fix does not address this distinct mechanism.
+
+At `0252423`, production snapshot orchestration keeps printer MQTT, EDOL MQTT
+and camera TLS open before HTTPS verification (four TLS sessions). Model
+streaming additionally uses separate FTPS control/data sessions (five TLS
+sessions at data setup). The physical model log explicitly reports allocation
+failure at that fifth session. The camera source/resource difference and new
+real-vendor reproduction support the same memory-pressure explanation; no
+on-device allocation trace identifies its exact failing allocation.
+
+Secure operations now pause printer MQTT before bulk work and restore it only
+after cleanup. The operation guard and EDOL identity/credentials stay intact;
+the existing reconnect loop handles a failed restoration. Home skips this pause.
+The common descriptor wrapper covers the remaining LAN clients as well as the
+EDOL client. The additional lab heap/host diagnostics change no verifier flags.
+
+### Actual automated results
+
+- **16 exact-vendor verifier cases PASS**, plus a memory-pressure regression:
+  `fault_at=1` reproduces NOT_TRUSTED at depth 0 for the correct CA/same leaf;
+  normal verification visits depths 1 and 0 with flags zero. Three sequential
+  rejection/recovery cycles PASS. The fault allocator is enabled only in the
+  desktop test CMake build, not firmware. Vendor source files remain unchanged
+  and pinned hashes are still checked. Foreign CA, bad signature, wrong IP and
+  expired/future negatives remain rejected.
+- **13 distinct native executable configurations PASS**. The new secure Agent
+  orchestration run checks pause during transfer, cleanup before reconnect,
+  failure exits, failed restore/main-loop recovery and already-offline behavior.
+  Home asserts no pause/reconnect calls. Existing production upload/enrollment,
+  repeated cleanup, FTPS, provisioning and credential controls also pass.
+  The full runner stops on Windows temporary-directory cleanup after twelve
+  successful executables; FTPS passed separately. The runner exit is not PASS.
+- **Three Python CA-hook tests PASS**.
+- **Home, secure and secure_smoke builds SUCCESS** with the existing public CA.
+  The final smoke build includes host/port and heap diagnostics. A local
+  PlatformIO lock permission issue was resolved by authorized build access.
+- Python host runner Sonar analysis: no findings. The available analyzer does
+  not support C++ or CMake. Both repositories pass `git diff --check`.
+
+Reproduction uses the existing commands above:
+
+```powershell
+py scripts/run_ip_san_tests.py --mbedtls-source .pio/ip-san-vendor/mbedtls-2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9 --openssl "C:/Program Files/Git/usr/bin/openssl.exe"
+py -c "from pathlib import Path; from scripts.run_host_tests import run_test; run_test(Path.cwd(),'agent','src/agent/AgentService.cpp'); run_test(Path.cwd(),'agent','src/agent/AgentService.cpp',secure=True)"
+```
+
+Fault injection establishes a concrete failure mechanism in real vendor code,
+not a mock returning a predetermined trust flag. Host orchestration tests do
+not establish the device's heap margin or a real JPEG upload. Physical camera
+upload/display, Agent model transfer, revoke/re-pair and AMS remain pending.
+No device, Stage 9 endpoint, deployment, authority or database was touched.
+
+Before builds, the prior smoke artifact was preserved as ignored
+`stage9-restoration/pre-pressure-verification-secure-smoke-firmware.bin`
+(1,032,928 bytes), SHA-256
+`03f262360cebc75f657a15029d74a3ceda65f32accbdbe76812a727b788aa3fc`.
+This is a build artifact, not a flash dump. Existing restoration files remain
+untouched. Rollback requires separate approval and never resets NVS/identity.

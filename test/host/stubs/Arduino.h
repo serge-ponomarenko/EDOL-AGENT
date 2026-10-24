@@ -66,6 +66,12 @@ struct FakeSerial
 };
 
 extern FakeSerial Serial;
+struct FakeEsp
+{
+    uint32_t getFreeHeap() const { return 200000; }
+    uint32_t getMaxAllocHeap() const { return 100000; }
+};
+#define ESP FakeEsp()
 extern uint32_t fakeMillis;
 inline uint32_t millis() { return fakeMillis; }
 inline void delay(uint32_t ms) { fakeMillis += ms; }

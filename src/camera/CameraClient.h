@@ -1,6 +1,6 @@
 #pragma once
 
-#include <WiFiClientSecure.h>
+#include "../util/SocketTlsClient.h"
 
 #include <functional>
 
@@ -17,7 +17,7 @@ public:
         std::function<bool(const uint8_t *, size_t)> handler);
 
 private:
-    WiFiClientSecure client_;
+    SocketTlsClient client_;
 
     bool readFully(
         uint8_t *buffer,

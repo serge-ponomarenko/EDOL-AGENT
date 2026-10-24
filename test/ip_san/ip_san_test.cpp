@@ -1,6 +1,8 @@
 #include "security/IpSanIdentity.h"
 #include <mbedtls/ssl.h>
 #include <mbedtls/version.h>
+#include <mbedtls/platform.h>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -21,10 +23,81 @@ struct Certificate
     ~Certificate() { mbedtls_x509_crt_free(&value); }
 };
 
+size_t allocationAttempt = 0, failAllocation = 0, blockedAllocations = 0;
+bool armedAllocator = false;
+
+void *testCalloc(size_t count, size_t size)
+{
+    if (armedAllocator && ++allocationAttempt == failAllocation)
+    {
+        ++blockedAllocations;
+        return nullptr;
+    }
+    return std::calloc(count, size);
+}
+
+struct VerificationTrace
+{
+    unsigned char ip[4] = {192, 0, 2, 10};
+    unsigned depths = 0;
+};
+
+int tracedVerify(void *context, mbedtls_x509_crt *certificate, int depth, uint32_t *flags)
+{
+    auto *trace = static_cast<VerificationTrace *>(context);
+    trace->depths |= 1U << depth;
+    return IpSanIdentity::verify(trace->ip, certificate, depth, flags);
+}
+
+void memoryRegression(const std::string &directory)
+{
+    struct Result { int status; uint32_t flags; size_t allocations; size_t blocked; unsigned depths; };
+    auto run = [&](size_t failAt) {
+        // Load the identical leaf and correct CA before injecting a verifier allocation failure.
+        Certificate root(directory + "/ca.pem"), leaf(directory + "/ip.pem");
+        VerificationTrace trace;
+        uint32_t flags = UINT32_MAX;
+        allocationAttempt = blockedAllocations = 0;
+        failAllocation = failAt;
+        armedAllocator = true;
+        int status = mbedtls_x509_crt_verify(&leaf.value, &root.value, nullptr, "192.0.2.10",
+                                           &flags, tracedVerify, &trace);
+        armedAllocator = false;
+        return Result{status, flags, allocationAttempt, blockedAllocations, trace.depths};
+    };
+    const auto probe = run(0);
+    require(probe.status == 0 && probe.flags == 0 && probe.depths == 3, "Correct-chain probe failed");
+    size_t maskedFailure = 0;
+    for (size_t index = 1; index <= probe.allocations; ++index)
+    {
+        const auto upload = run(index);
+        if (upload.blocked == 1 && upload.status == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
+            && upload.flags == MBEDTLS_X509_BADCERT_NOT_TRUSTED && upload.depths == 1)
+        {
+            maskedFailure = index;
+            break;
+        }
+    }
+    require(maskedFailure != 0, "Did not reproduce allocation failure masked as leaf-only NOT_TRUSTED");
+    for (unsigned attempt = 0; attempt < 3; ++attempt)
+    {
+        const auto pressure = run(maskedFailure);
+        require(pressure.status == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
+                && pressure.flags == MBEDTLS_X509_BADCERT_NOT_TRUSTED && pressure.depths == 1,
+                "Memory pressure must fail closed with the observed leaf-only trust flag");
+        const auto released = run(0);
+        require(released.status == 0 && released.flags == 0 && released.depths == 3,
+                "Releasing memory did not restore normal chain verification");
+    }
+    std::cout << "PASS memory-pressure regression: correct CA/identical leaf, fault_at=" << maskedFailure
+              << ", leaf-only NOT_TRUSTED, 3 rejection/recovery cycles\n";
+}
+
 int main(int argc, char **argv)
 {
     require(argc == 2, "Supply disposable fixture directory");
     require(mbedtls_version_get_number() == 0x021C0700, "Wrong mbedTLS version");
+    require(mbedtls_platform_set_calloc_free(testCalloc, std::free) == 0, "Allocator setup failed");
     const std::string directory = argv[1];
     Certificate root(directory + "/ca.pem"), foreign(directory + "/foreign-ca.pem");
     unsigned tests = 0;
@@ -85,4 +158,5 @@ int main(int argc, char **argv)
     require(flags == (MBEDTLS_X509_BADCERT_CN_MISMATCH | MBEDTLS_X509_BADCERT_EXPIRED), "Non-leaf flags changed");
     ++tests;
     std::cout << tests << " real-vendor verification cases PASS (no device or live endpoint)\n";
+    memoryRegression(directory);
 }

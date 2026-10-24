@@ -4,6 +4,7 @@
 #include "../http/HttpUploadClient.h"
 #include "../camera/CameraClient.h"
 #include "../mqtt/AgentEventPublisher.h"
+#include "../mqtt/BambuMqttClient.h"
 
 enum class ModelUploadFailureReason
 {
@@ -30,7 +31,8 @@ public:
         FtpsClient &ftpsClient,
         HttpUploadClient &uploadClient,
         CameraClient &cameraClient,
-        AgentEventPublisher &eventPublisher);
+        AgentEventPublisher &eventPublisher,
+        BambuMqttClient &printerTelemetry);
 
     bool uploadModel(
         const String &fileName);
@@ -51,6 +53,9 @@ private:
     HttpUploadClient &uploadClient_;
     CameraClient &cameraClient_;
     AgentEventPublisher &eventPublisher_;
+    BambuMqttClient &printerTelemetry_;
+    bool pausePrinterTelemetry();
+    void resumePrinterTelemetry(bool wasConnected);
 
     uint32_t lastSnapshotMillis_ = 0;
     bool lastSnapshotSuccess_ = false;

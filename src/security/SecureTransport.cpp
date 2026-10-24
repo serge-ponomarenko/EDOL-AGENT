@@ -57,6 +57,12 @@ bool SecureTransport::prepare(Client &client)
 }
 
 #if EDOL_AGENT_SMOKE_BUILD
+void SecureTransport::reportMemory(const char *stage)
+{
+    Serial.printf("SMOKE TLS memory stage=%s free_heap=%u largest_block=%u\n", stage,
+                  ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+}
+
 int SecureTransport::Client::inspectCertificate(void *context, mbedtls_x509_crt *certificate, int depth, uint32_t *flags)
 {
     auto *client = static_cast<Client *>(context);

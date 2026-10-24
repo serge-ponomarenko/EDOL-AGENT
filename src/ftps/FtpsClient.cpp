@@ -12,8 +12,8 @@ bool FtpsClient::connect()
     control_.setInsecure();
     data_.setInsecure();
 
-    control_.setTimeout(10000);
-    data_.setTimeout(10000);
+    control_.setTimeout(10);
+    data_.setTimeout(10);
 
     if (!control_.connect(
             ConfigManager::getBambuPrinterHost().c_str(),

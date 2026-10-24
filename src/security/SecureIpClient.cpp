@@ -21,9 +21,7 @@ void SecureTransport::Client::stop()
         }
     }
 #endif
-    WiFiClientSecure::stop();
-    // SDK 2.0.17 zeroes the context: retain -1 so repeated cleanup cannot close fd 0.
-    sslclient->socket = -1;
+    SocketTlsClient::stop();
 }
 
 int SecureTransport::Client::connect(const char *host, uint16_t port)
@@ -49,9 +47,15 @@ int SecureTransport::Client::connect(const char *host, uint16_t port)
 #if EDOL_AGENT_SMOKE_BUILD
     ipIdentity_ = ipIdentity;
     mbedtls_ssl_set_verify(&sslclient->ssl_ctx, inspectCertificate, this);
+    Serial.printf("SMOKE TLS connect host=%s port=%u\n", host, port);
+    reportMemory("before-handshake");
 #endif
     // The original host is still passed to set_hostname; VERIFY_REQUIRED remains enabled.
-    return WiFiClientSecure::connect(host, port);
+    const int connected = WiFiClientSecure::connect(host, port);
+#if EDOL_AGENT_SMOKE_BUILD
+    reportMemory("after-handshake");
+#endif
+    return connected;
 }
 
 int SecureTransport::Client::connect(const char *host, uint16_t port, int32_t timeout)

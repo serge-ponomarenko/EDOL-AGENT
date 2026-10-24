@@ -36,7 +36,8 @@ AgentService agentService(
     ftpsClient,
     uploadClient,
     cameraClient,
-    eventPublisher);
+    eventPublisher,
+    bambuMqttClient);
 
 CommandProcessor commandProcessor(
     bambuMqttClient,

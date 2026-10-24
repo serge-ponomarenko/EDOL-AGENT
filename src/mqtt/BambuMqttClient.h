@@ -1,7 +1,7 @@
 #pragma once
 
 #include <PubSubClient.h>
-#include <WiFiClientSecure.h>
+#include "../util/SocketTlsClient.h"
 
 using MessageHandler =
     void (*)(const char *topic,
@@ -44,7 +44,7 @@ private:
 
     uint32_t lastMessageReceivedTime_;
 
-    WiFiClientSecure secureClient_;
+    SocketTlsClient secureClient_;
     PubSubClient mqttClient_;
 
     String mqttHost_;

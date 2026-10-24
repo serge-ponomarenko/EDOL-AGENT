@@ -11,6 +11,7 @@ struct FtpSocketFixture
 };
 extern FtpSocketFixture ftpControl, ftpData;
 extern unsigned ftpSocketCount;
+struct sslclient_context { int socket = -1; };
 class IPAddress
 {
 public:
@@ -20,6 +21,9 @@ public:
 class WiFiClientSecure
 {
     FtpSocketFixture &fixture_;
+protected:
+    sslclient_context context_;
+    sslclient_context *sslclient = &context_;
 public:
     WiFiClientSecure() : fixture_(ftpSocketCount++ % 2 == 0 ? ftpControl : ftpData) {}
     void setInsecure() {}
@@ -52,5 +56,5 @@ public:
         return size;
     }
     void flush() {}
-    void stop() { fixture_.connected = false; }
+    virtual void stop() { fixture_.connected = false; sslclient->socket = 0; }
 };

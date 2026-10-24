@@ -228,3 +228,31 @@ Temporary TLS/network failure or a broker rejection does not enter Setup Mode
 or clear an identity. After an operator-confirmed revoke, explicitly use SETUP
 in the lab console, retain saved fields and enter a fresh owner-issued code.
 No reset/erase is necessary. This source increment has not been flashed.
+
+### Secure transfer TLS memory budget
+
+The `0252423` retest validated the same Core HTTPS leaf in the lab TLS probe,
+but camera upload failed with leaf-only NOT_TRUSTED. Model transfer separately
+failed with an explicit TLS allocation error while opening FTPS data. The exact
+vendor verifier reproduces leaf-only NOT_TRUSTED when a signature-verification
+allocation fails, even with a correct CA and unchanged leaf.
+
+Secure snapshot/model operations now temporarily disconnect only printer MQTT,
+freeing its TLS heap before opening the bulk clients. On all success/failure
+paths the bulk clients close before printer MQTT is reconnected. If reconnect
+fails, the normal main loop retries; settings and identity are retained. This
+introduces a telemetry interruption during secure transfers. EDOL MQTT is not
+intentionally disconnected; existing synchronous-transfer/keepalive limits
+still apply. Home does not pause its printer MQTT connection.
+
+A common TLS socket wrapper also preserves descriptor -1 after SDK cleanup for
+camera, FTPS and printer MQTT, correcting the remaining LAN descriptor-0 errors.
+FTPS socket timeouts now use the SDK's seconds units. Existing LAN certificate
+verification limitations are unchanged; verified EDOL TLS is not weakened.
+Lab diagnostics add host/port and heap/largest-block observations to the existing
+certificate-depth/fingerprint output. These are diagnostics, not acceptance.
+
+Build/flash only after operator approval, using the same CA and paired identity.
+The next physical gate is one TLS probe and exactly two sequential SNAPSHOT
+commands with HTTP 200 and a genuinely updating dashboard image. Stop on another
+trust/allocation failure; do not proceed to revoke/re-pair until camera passes.
