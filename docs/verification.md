@@ -288,3 +288,59 @@ failure. Physical model/camera and full print lifecycle retests remain pending;
 the October 24 operator's enrollment/MQTT/telemetry evidence remains accepted.
 No upload, reset, NVS/configuration change, deployment or Stage 9 request was
 performed in this source increment.
+
+## Snapshot TLS lifecycle and revoke follow-up
+
+Operator evidence at `5aba847` confirms flash, new pairing, ACTIVE/MQTT READY,
+automatic Hub status and real camera JPEG capture. Snapshot HTTPS still failed
+NOT_TRUSTED (flag 0x8). This is distinct from the accepted IPv4 SAN correction.
+
+Source inspection of the installed Arduino-ESP32 2.0.17 found
+`stop_ssl_socket` zeroes the descriptor after `WiFiClientSecure::stop` set it
+to -1. Upload abort/preparation/reconnect can therefore configure/close fd 0;
+fresh enrollment preparation starts at -1. The subclass now restores -1 after
+every stop in both secure builds. Its ten-second timeout now uses the SDK's
+seconds units. CA, VERIFY_REQUIRED and the IPv4 SAN decision are preserved.
+This establishes a lifecycle defect and explains errno=9; it does **not** prove
+why the observed certificate validation returned NOT_TRUSTED.
+
+The lab verifier prints certificate-depth flags and the peer leaf DER SHA-256
+for comparison across TLS probe/enrollment/upload. No certificate body, code,
+credential, response body or private key is printed. Normal secure builds omit
+these diagnostics. Trust/time/signature failures still reject the handshake.
+
+Actual automated results for this increment:
+
+- 12 distinct native executables PASS, run through the host helper. These include
+  the new `tls_lifecycle` executable linking production enrollment, upload and
+  secure transport together: repeated snapshot/abort/finish, certificate failure
+  rejection before HTTP transmission, retry and preserved identity. The separate
+  secure transport test models the actual SDK cleanup behavior and runs 25
+  cleanup/reconnect cycles, exact IP identity and preserved trust-flag controls.
+- 16 real-vendor mbedTLS certificate cases PASS using the existing pinned source
+  and unrelated disposable fixtures. Wrong CA/signature/time/IP remain rejected.
+- Three Python CA-hook tests PASS.
+- Home, secure and secure_smoke ESP32 builds SUCCESS with the existing public CA.
+  Initial cache/lock permission failures were resolved by authorized build access.
+- Python runner Sonar analysis clean after extracting a repeated source literal.
+  Available snippet analysis does not support C++. No suppression was added.
+
+Targeted reproduction:
+
+```powershell
+py -c "from pathlib import Path; from scripts.run_host_tests import run_test; run_test(Path.cwd(),'secure_transport','src/security/SecureTransport.cpp',secure=True,smoke=True); run_test(Path.cwd(),'tls_lifecycle','src/http/HttpUploadClient.cpp',secure=True,smoke=True)"
+```
+
+These fake-socket checks and real-vendor verifier checks are separate evidence;
+neither is a real snapshot-upload PASS. No new firmware was flashed. Backend
+`docs/deployment/stage9-hardware-remediation.md` contains the operator-approved
+probe/snapshot/revoke/re-pair sequence and remaining physical acceptance.
+The existing protocol has no authenticated revocation confirmation; MQTT/TLS
+failure does not automatically enter Setup Mode or clear credentials.
+
+Before builds, the prior smoke binary was preserved as ignored
+`stage9-restoration/pre-camera-tls-fix-secure-smoke-firmware.bin`, SHA-256
+`5b9c36167864237dd7c869901088d56380cf0161ec412004c569224a2c665cc9`.
+It is a local build artifact, not a dump of device flash. Rollback requires
+separate operator approval and preserves current identity/NVS/CA. No Stage 9
+runtime, database, authority, deployment, hardware or cleanup action occurred.

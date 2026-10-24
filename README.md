@@ -208,3 +208,23 @@ been flashed. The exact earlier physical DOWNLOAD_FAILED substage is unknown.
 After separate upload approval, reuse the existing public CA, saved settings
 and paired identity; do not re-enroll/reset the device to test FTPS. The backend
 Stage 9 remediation runbook contains the coordinated retest and rollback plan.
+
+### Snapshot TLS lifecycle and revoke checkpoint
+
+At `5aba847` the operator verified fresh enrollment, MQTT READY, automatic Hub
+pairing status and real JPEG capture. HTTPS snapshot upload failed with
+NOT_TRUSTED (flag 0x8); dashboard camera acceptance remains blocked.
+
+The secure client now restores socket descriptor -1 after SDK 2.0.17 cleanup,
+so repeated abort/end/connect cannot operate on descriptor 0 owned by another
+client. Secure read/connect timeout preparation uses ten seconds, matching the
+SDK API units. CA and strict IP SAN verification remain unchanged. This fixes
+confirmed lifecycle defects but does not prove the origin of the observed
+trust flag. Lab-only certificate-depth flags and peer leaf SHA-256 allow that
+remaining failure to be investigated without dumping certificates or secrets.
+
+There is no authenticated revoke notification in the current firmware protocol.
+Temporary TLS/network failure or a broker rejection does not enter Setup Mode
+or clear an identity. After an operator-confirmed revoke, explicitly use SETUP
+in the lab console, retain saved fields and enter a fresh owner-issued code.
+No reset/erase is necessary. This source increment has not been flashed.

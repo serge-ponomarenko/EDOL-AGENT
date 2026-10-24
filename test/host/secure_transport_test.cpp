@@ -55,10 +55,23 @@ int main()
     assert(other.connect("192.0.2.2", 443, 5000));
     assert(client.context().verify != nullptr && other.context().verify != nullptr);
     assert(client.context().context != other.context().context);
-    assert(static_cast<unsigned char *>(client.context().context)[3] == 1);
-    assert(static_cast<unsigned char *>(other.context().context)[3] == 2);
+    unsigned char matchingIp[] = {192, 0, 2, 1};
+    mbedtls_x509_crt leaf;
+    leaf.subject_alt_names.buf.tag = MBEDTLS_ASN1_CONTEXT_SPECIFIC | MBEDTLS_X509_SAN_IP_ADDRESS;
+    leaf.subject_alt_names.buf.len = 4;
+    leaf.subject_alt_names.buf.p = matchingIp;
+    leaf.raw.len = 4;
+    leaf.raw.p = matchingIp;
+    uint32_t nameFlags = MBEDTLS_X509_BADCERT_CN_MISMATCH;
+    client.context().verify(client.context().context, &leaf, 0, &nameFlags);
+    assert(nameFlags == 0);
+    other.context().verify(other.context().context, &leaf, 0, &nameFlags);
+    assert(nameFlags == MBEDTLS_X509_BADCERT_CN_MISMATCH);
+    assert(Serial.output.find("peer_leaf_sha256=abab") != std::string::npos);
     assert(client.connect("core.example.invalid", 443));
-    assert(client.context().verify == nullptr); // Reused DNS client restores native verification.
+    nameFlags = MBEDTLS_X509_BADCERT_CN_MISMATCH;
+    client.context().verify(client.context().context, &leaf, 0, &nameFlags);
+    assert(nameFlags == MBEDTLS_X509_BADCERT_CN_MISMATCH); // DNS retains native verification.
     assert(!client.connect("192.0.2.001", 443));
     assert(!SecureTransport::prepare(client));
     assert(!SecureTransport::synchronizeClock());
@@ -70,6 +83,23 @@ int main()
     assert(ntpAttempts == 2);
     assert(SecureTransport::synchronizeClock());
     assert(ntpAttempts == 2); // Reuse only a confirmed clock, not merely its lower bound.
+
+    // Upload abort -> prepare -> connect -> finish/abort may repeat on one client.
+    // Enrollment HTTPClient.end() and explicit cleanup may also both call stop().
+    for (unsigned attempt = 0; attempt < 25; ++attempt)
+    {
+        client.stop();
+        client.stop();
+        assert(SecureTransport::prepare(client));
+        assert(client.rootCA != nullptr && std::strcmp(client.rootCA, EDOL_AGENT_ROOT_CA) == 0);
+        assert(client.timeoutSeconds == 10);
+        assert(client.connect("192.0.2.1", 443));
+        nameFlags = MBEDTLS_X509_BADCERT_CN_MISMATCH | MBEDTLS_X509_BADCERT_NOT_TRUSTED;
+        client.context().verify(client.context().context, &leaf, 0, &nameFlags);
+        assert(nameFlags == MBEDTLS_X509_BADCERT_NOT_TRUSTED);
+        client.stop();
+    }
+    assert(fakeForeignSocketCloses() == 0 && fakeInvalidSocketOptions() == 0);
 
     for (uint32_t flag : {uint32_t(MBEDTLS_X509_BADCERT_EXPIRED), uint32_t(MBEDTLS_X509_BADCERT_FUTURE),
                           uint32_t(MBEDTLS_X509_BADCERT_CN_MISMATCH), uint32_t(MBEDTLS_X509_BADCERT_NOT_TRUSTED)})

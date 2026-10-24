@@ -9,6 +9,8 @@
 #include "PairingProtocol.h"
 #include "../config/ConfigManager.h"
 #include <mbedtls/x509.h>
+#include <mbedtls/sha256.h>
+#include "IpSanIdentity.h"
 #endif
 
 namespace
@@ -49,23 +51,29 @@ bool SecureTransport::prepare(Client &client)
 #endif
     client.setCACert(EDOL_AGENT_ROOT_CA);
     client.setHandshakeTimeout(10);
-    client.setTimeout(10000);
+    // Arduino-ESP32 WiFiClientSecure takes seconds, unlike HTTPClient's milliseconds.
+    client.setTimeout(10);
     return true;
 }
 
 #if EDOL_AGENT_SMOKE_BUILD
-void SecureTransport::Client::stop()
+int SecureTransport::Client::inspectCertificate(void *context, mbedtls_x509_crt *certificate, int depth, uint32_t *flags)
 {
-    if (!flagsKnown_ && _lastError == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED && sslclient != nullptr)
+    auto *client = static_cast<Client *>(context);
+    if (client->ipIdentity_) IpSanIdentity::verify(client->expectedIp_, certificate, depth, flags);
+    Serial.printf("SMOKE TLS certificate depth=%d verify_flags=0x%08lx\n", depth, static_cast<unsigned long>(*flags));
+    if (depth == 0 && certificate != nullptr && certificate->raw.p != nullptr)
     {
-        const uint32_t flags = mbedtls_ssl_get_verify_result(&sslclient->ssl_ctx);
-        if (flags != 0 && flags != UINT32_MAX)
+        unsigned char digest[32];
+        if (mbedtls_sha256_ret(certificate->raw.p, certificate->raw.len, digest, 0) == 0)
         {
-            flags_ = flags;
-            flagsKnown_ = true;
+            char hex[65];
+            for (size_t index = 0; index < sizeof(digest); ++index)
+                snprintf(hex + 2 * index, 3, "%02x", digest[index]);
+            Serial.printf("SMOKE TLS peer_leaf_sha256=%s\n", hex);
         }
     }
-    WiFiClientSecure::stop();
+    return 0; // Observe only; IpSanIdentity changes only the leaf name decision.
 }
 
 void SecureTransport::reportClock(const char *stage)

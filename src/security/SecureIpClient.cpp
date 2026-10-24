@@ -8,15 +8,34 @@
 #error "Review IP SAN verification and callback lifecycle before changing the audited mbedTLS 2.28.7 SDK"
 #endif
 
+void SecureTransport::Client::stop()
+{
+#if EDOL_AGENT_SMOKE_BUILD
+    if (!flagsKnown_ && _lastError == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED && sslclient != nullptr)
+    {
+        const uint32_t flags = mbedtls_ssl_get_verify_result(&sslclient->ssl_ctx);
+        if (flags != 0 && flags != UINT32_MAX)
+        {
+            flags_ = flags;
+            flagsKnown_ = true;
+        }
+    }
+#endif
+    WiFiClientSecure::stop();
+    // SDK 2.0.17 zeroes the context: retain -1 so repeated cleanup cannot close fd 0.
+    sslclient->socket = -1;
+}
+
 int SecureTransport::Client::connect(const char *host, uint16_t port)
 {
-    // Base cleanup preserves CA configuration, but resets the previous session callback.
-    WiFiClientSecure::stop();
+    // Preserve the invalid descriptor sentinel across the SDK's zeroing cleanup.
+    stop();
     _lastError = 0;
 #if EDOL_AGENT_SMOKE_BUILD
     resetDiagnostics();
 #endif
-    if (IpSanIdentity::parse(host, expectedIp_))
+    const bool ipIdentity = IpSanIdentity::parse(host, expectedIp_);
+    if (ipIdentity)
         mbedtls_ssl_set_verify(&sslclient->ssl_ctx, IpSanIdentity::verify, expectedIp_);
     else
     {
@@ -27,6 +46,10 @@ int SecureTransport::Client::connect(const char *host, uint16_t port)
         }
         mbedtls_ssl_set_verify(&sslclient->ssl_ctx, nullptr, nullptr);
     }
+#if EDOL_AGENT_SMOKE_BUILD
+    ipIdentity_ = ipIdentity;
+    mbedtls_ssl_set_verify(&sslclient->ssl_ctx, inspectCertificate, this);
+#endif
     // The original host is still passed to set_hostname; VERIFY_REQUIRED remains enabled.
     return WiFiClientSecure::connect(host, port);
 }
