@@ -62,6 +62,7 @@ struct FakeSerial
         if (size > 0) output.append(buffer, std::min(static_cast<size_t>(size), sizeof(buffer) - 1));
     }
     void println(const char *message) { output += message; output += '\n'; }
+    size_t write(uint8_t value) { output += static_cast<char>(value); return 1; }
 };
 
 extern FakeSerial Serial;

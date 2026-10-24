@@ -29,6 +29,9 @@ public:
         Stream &output);
 
     void disconnect();
+    const char *lastFailure() const { return failure_; }
+    int lastReplyCode() const { return replyCode_; }
+    size_t transferredBytes() const { return transferred_; }
 
 private:
     int sendCommand(const char *command);
@@ -46,4 +49,8 @@ private:
     WiFiClientSecure control_;
     String lastReply_;
     WiFiClientSecure data_;
+    const char *failure_ = "NONE";
+    int replyCode_ = -1;
+    size_t transferred_ = 0;
+    bool fail(const char *stage) { failure_ = stage; return false; }
 };

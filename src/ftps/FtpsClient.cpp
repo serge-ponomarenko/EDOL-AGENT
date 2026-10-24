@@ -1,4 +1,5 @@
 #include "FtpsClient.h"
+#include "FtpReply.h"
 
 #include <Arduino.h>
 
@@ -74,26 +75,13 @@ bool FtpsClient::enterPassiveMode(PassiveEndpoint &endpoint)
 
     if (code != 227)
     {
-        return false;
+        return fail("PASV_REPLY");
     }
 
-    int h1, h2, h3, h4, p1, p2;
-
-    if (sscanf(
-            lastReply_.c_str(),
-            "227 (%d,%d,%d,%d,%d,%d)",
-            &h1,
-            &h2,
-            &h3,
-            &h4,
-            &p1,
-            &p2) != 6)
-    {
-        return false;
-    }
-
-    endpoint.ip = IPAddress(h1, h2, h3, h4);
-    endpoint.port = (p1 << 8) | p2;
+    uint8_t tuple[6];
+    if (!FtpReply::passive(lastReply_.c_str(), tuple)) return fail("PASV_PARSE");
+    endpoint.ip = IPAddress(tuple[0], tuple[1], tuple[2], tuple[3]);
+    endpoint.port = static_cast<uint16_t>((tuple[4] << 8) | tuple[5]);
 
     return true;
 }
@@ -105,7 +93,7 @@ bool FtpsClient::openDataConnection(const PassiveEndpoint &endpoint)
     if (!data_.connect(endpoint.ip, endpoint.port))
     {
         Serial.println("Data connection failed");
-        return false;
+        return fail("DATA_CONNECT");
     }
 
     return true;
@@ -138,7 +126,7 @@ bool FtpsClient::listFiles()
     {
         while (data_.available())
         {
-            char c = data_.read();
+            char c = static_cast<char>(data_.read());
             Serial.write(c);
         }
 
@@ -175,6 +163,8 @@ bool FtpsClient::downloadFile(
     const char *remoteFile,
     Stream &output)
 {
+    failure_ = "NONE";
+    transferred_ = 0;
     PassiveEndpoint endpoint;
 
     if (!enterPassiveMode(endpoint))
@@ -195,12 +185,13 @@ bool FtpsClient::downloadFile(
 
         data_.stop();
 
-        return false;
+        return fail("RETR_REPLY");
     }
 
     uint8_t buffer[1024];
 
-    while (data_.connected())
+    uint32_t lastData = millis();
+    while (data_.connected() || data_.available())
     {
         while (data_.available())
         {
@@ -208,8 +199,10 @@ bool FtpsClient::downloadFile(
                 buffer,
                 sizeof(buffer));
 
+            if (bytesRead < 0) { disconnect(); return fail("DATA_READ"); }
             if (bytesRead > 0)
             {
+                lastData = millis();
                 size_t written =
                     output.write(
                         buffer,
@@ -219,10 +212,14 @@ bool FtpsClient::downloadFile(
                 {
                     Serial.println("Output stream write failed");
                     disconnect();
-                    return false;
+                    return fail("HTTP_STREAM_WRITE");
                 }
+                transferred_ += static_cast<size_t>(bytesRead);
             }
+            else break;
         }
+
+        if (millis() - lastData >= 10000) { disconnect(); return fail("DATA_TIMEOUT"); }
 
         delay(1);
     }
@@ -231,7 +228,7 @@ bool FtpsClient::downloadFile(
 
     code = readReply();
 
-    return code == 226;
+    return code == 226 || fail("COMPLETION_REPLY");
 }
 
 void FtpsClient::disconnect()
@@ -268,34 +265,44 @@ int FtpsClient::sendCommand(const char *command)
 
 int FtpsClient::readReply()
 {
-    Serial.printf(
-        "FTP state before read: connected=%s available=%d\n",
-        control_.connected() ? "true" : "false",
-        control_.available());
-
-    lastReply_ =
-        control_.readStringUntil('\n');
-
-    lastReply_.trim();
-
-    Serial.printf(
-        "FTP state after read: connected=%s available=%d\n",
-        control_.connected() ? "true" : "false",
-        control_.available());
-
-    Serial.println("FTP reply received");
-
-    if (lastReply_.length() < 3)
+    char line[512];
+    size_t used = 0, total = 0;
+    int multiline = -1;
+    uint32_t started = millis();
+    replyCode_ = -1;
+    while (millis() - started < 10000 && total < 4096)
     {
-        Serial.println(
-            "FTP invalid reply");
-
-        return -1;
+        if (!control_.available())
+        {
+            if (!control_.connected()) break;
+            delay(1);
+            continue;
+        }
+        int value = control_.read();
+        if (value < 0) break;
+        ++total;
+        if (value == '\r') continue;
+        if (value != '\n')
+        {
+            if (used + 1 >= sizeof(line)) break;
+            line[used++] = static_cast<char>(value);
+            continue;
+        }
+        line[used] = '\0';
+        int code = used >= 3 ? FtpReply::code(line) : -1;
+        if (multiline < 0 && code >= 0 && used > 3 && line[3] == '-') multiline = code;
+        else if (code >= 0 && (used == 3 || line[3] == ' ') && (multiline < 0 || code == multiline))
+        {
+            lastReply_ = line;
+            replyCode_ = code;
+            Serial.printf("FTP reply code=%d\n", code);
+            return code;
+        }
+        used = 0;
     }
-
-    return lastReply_
-        .substring(0, 3)
-        .toInt();
+    lastReply_ = "";
+    Serial.println("FTP reply unavailable, oversized or incomplete");
+    return -1;
 }
 
 void FtpsClient::writeCommand(const String &command)

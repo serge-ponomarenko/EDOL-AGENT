@@ -138,12 +138,15 @@ bool AgentService::uploadModel(
             fileName.c_str(),
             uploadClient_))
     {
+        char reason[64];
+        snprintf(reason, sizeof(reason), "DOWNLOAD_FAILED:%s", ftpsClient_.lastFailure());
         eventPublisher_.publishModelUploadFailed(
             fileName,
-            "DOWNLOAD_FAILED");
+            reason);
 
-        Serial.println(
-            "Download failed");
+        Serial.printf("Model transfer failed: stage=%s ftp_code=%d transferred=%u expected=%u\n",
+                      ftpsClient_.lastFailure(), ftpsClient_.lastReplyCode(),
+                      static_cast<unsigned>(ftpsClient_.transferredBytes()), static_cast<unsigned>(fileSize));
 
         return false;
     }

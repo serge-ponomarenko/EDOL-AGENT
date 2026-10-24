@@ -192,3 +192,19 @@ in a separate directory with fresh Git history. Never copy the original `.git`.
 
 The [original POC](docs/edol-agent-poc.md) is historical design material, not a
 claim that its proposed secure transport or future features are implemented.
+
+### Stage 9 model-transfer diagnostics (October 24)
+
+FTPS now accepts normal PASV response prefixes, handles multiline replies and
+drains buffered file data after connection closure. Control replies are bounded
+and downloads have a ten-second idle timeout. A failed download reports
+`DOWNLOAD_FAILED:<stage>` through the existing event reason field and logs only
+the stage, numeric FTP code and transferred/expected byte counts. No raw server
+reply or credential is logged. Unicode basenames remain supported.
+
+Operator evidence at `bf84769` confirms secure enrollment, MQTT provisioning
+and real telemetry. This increment has source/build evidence only; it has not
+been flashed. The exact earlier physical DOWNLOAD_FAILED substage is unknown.
+After separate upload approval, reuse the existing public CA, saved settings
+and paired identity; do not re-enroll/reset the device to test FTPS. The backend
+Stage 9 remediation runbook contains the coordinated retest and rollback plan.

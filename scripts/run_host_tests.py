@@ -7,18 +7,25 @@ import subprocess
 import tempfile
 
 
-def run_test(root, name, production_source, secure=False, smoke=False):
+def test_inputs(root, name, production_source, secure):
     sources = [root / f"test/host/{name}_test.cpp"]
     if production_source:
         sources.append(root / production_source)
     if secure and production_source:
         sources.append(root / "src/security/SecureIpClient.cpp")
     extra_includes = []
+    if name == "ftps":
+        extra_includes.append(root / "test/ftps/stubs")
     if name in ("enrollment", "mqtt_enrollment"):
         library = root / ".pio/libdeps/lolin_d32/ArduinoJson/src"
         if not library.is_dir():
             raise RuntimeError("Build lolin_d32 first to resolve the real ArduinoJson parser for enrollment tests")
         extra_includes.append(library)
+    return sources, extra_includes
+
+
+def run_test(root, name, production_source, secure=False, smoke=False):
+    sources, extra_includes = test_inputs(root, name, production_source, secure)
     with tempfile.TemporaryDirectory(prefix="edol-agent-tests-") as tmp:
         executable = Path(tmp) / (f"{name}_test.exe" if os.name == "nt" else f"{name}_test")
         if os.name == "nt":
@@ -29,8 +36,8 @@ def run_test(root, name, production_source, secure=False, smoke=False):
             ], text=True).strip()
             vcvars = Path(installation) / "VC/Auxiliary/Build/vcvars64.bat"
             args = ["cl", "/nologo", "/std:c++14", "/EHsc", "/W4", "/WX",
-                    f"/I{root / 'test/host/stubs'}", f"/I{root / 'src'}",
                     *[f"/I{path}" for path in extra_includes],
+                    f"/I{root / 'test/host/stubs'}", f"/I{root / 'src'}",
                     *map(str, sources), f"/Fe:{executable}"]
             if secure:
                 args.append("/DEDOL_AGENT_SECURE_BUILD=1")
@@ -47,8 +54,8 @@ def run_test(root, name, production_source, secure=False, smoke=False):
             subprocess.run([compiler, "-std=c++11", "-Wall", "-Wextra", "-Werror",
                             *(["-DEDOL_AGENT_SECURE_BUILD=1"] if secure else []),
                             *(["-DEDOL_AGENT_SMOKE_BUILD=1"] if smoke else []),
-                            f"-I{root / 'test/host/stubs'}", f"-I{root / 'src'}",
                             *[f"-I{path}" for path in extra_includes],
+                            f"-I{root / 'test/host/stubs'}", f"-I{root / 'src'}",
                             *map(str, sources), "-o", str(executable)], cwd=tmp, check=True)
         subprocess.run([str(executable)], check=True)
 
@@ -65,6 +72,7 @@ def main():
     run_test(root, "mqtt", "src/mqtt/EdolMqttClient.cpp", secure=True)
     run_test(root, "secure_transport", "src/security/SecureTransport.cpp", secure=True, smoke=True)
     run_test(root, "provisioning", None, secure=True)
+    run_test(root, "ftps", "src/ftps/FtpsClient.cpp")
 
 
 if __name__ == "__main__":

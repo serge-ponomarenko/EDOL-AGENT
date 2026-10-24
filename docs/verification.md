@@ -256,3 +256,35 @@ NVS erase or factory reset was performed. Hardware reconnects, real camera
 timeouts, throughput, TLS security, provisioning UI and Stage 9.3b acceptance
 remain unverified. Host fakes do not establish compatibility with live systems.
 See the README for existing security limitations.
+
+## October 24 FTPS regression increment
+
+The offline FTPS test compiles the production `FtpsClient.cpp` with a scripted
+control/data socket fake. It covers normal/bare PASV prefixes and malformed
+tuples, multiline login replies, Unicode RETR, buffered EOF, PASV/RETR failures,
+idle timeout and short HTTPS stream writes. These fakes do not verify a real
+printer FTPS server or EDOL TLS; the existing secure transport code is unchanged.
+
+```powershell
+py scripts/run_host_tests.py
+# Standalone reproduction if Windows temporary-directory cleanup stops the runner:
+py -c "from pathlib import Path; from scripts.run_host_tests import run_test; run_test(Path.cwd(),'ftps','src/ftps/FtpsClient.cpp')"
+py -m unittest discover -s test -p 'test_secure_trust.py'
+# Secure builds require the existing public CA via EDOL_AGENT_ROOT_CA_FILE.
+pio run -e lolin_d32 -e lolin_d32_secure -e lolin_d32_secure_smoke
+```
+
+Actual evidence: eleven distinct native executables PASS (ten in the full
+runner, FTPS separately), three Python tests PASS, all three ESP32 builds
+SUCCESS. The full runner exited with Windows WinError 32 while cleaning its
+temporary directory after provisioning; it did not reach its final FTPS entry.
+Do not describe that runner exit as PASS. No tests were skipped and counted as
+executed. No pre-build secure_smoke binary existed, so no new restoration backup
+is claimed; existing ignored restoration files remain intact.
+
+New diagnostics contain only failure stage, numeric FTP reply code and byte
+counts. A DOWNLOAD_FAILED report alone does not establish TLS or authorization
+failure. Physical model/camera and full print lifecycle retests remain pending;
+the October 24 operator's enrollment/MQTT/telemetry evidence remains accepted.
+No upload, reset, NVS/configuration change, deployment or Stage 9 request was
+performed in this source increment.
