@@ -19,7 +19,7 @@ String host = "core.example.invalid";
 String ConfigManager::getCoreHost() { return host; }
 uint16_t ConfigManager::getCorePort() { return 443; }
 bool SecureTransport::synchronizeClock() { return clockReady; }
-bool SecureTransport::prepare(WiFiClientSecure &) { return trustReady; }
+bool SecureTransport::prepare(SecureTransport::Client &) { return trustReady; }
 bool AgentCredentialStore::save(const char *id, const char *secret)
 {
     stored = storageOk && PairingProtocol::validIdentity(id, secret);
@@ -45,7 +45,7 @@ int main()
     assert(httpState.url == "https://core.example.invalid:443/api/agent/v1/enroll");
     assert(httpState.request == "{\"pairingCode\":\"0123456789AB\"}");
     assert(httpState.redirects == HTTPC_DISABLE_FOLLOW_REDIRECTS);
-    assert(socketState.stops == 1);
+    assert(socketState.stops >= 1 && !socketState.connected);
     reset();
     assert(!AgentEnrollmentClient::enroll("bad\r\ncode"));
     assert(httpState.posts == 0 && !stored);

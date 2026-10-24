@@ -15,7 +15,7 @@ bool attempted = false, stored = false, clockReady = true;
 String ConfigManager::getCoreHost() { return "core.example.invalid"; }
 uint16_t ConfigManager::getCorePort() { return 443; }
 bool SecureTransport::synchronizeClock() { return clockReady; }
-bool SecureTransport::prepare(WiFiClientSecure &) { return true; }
+bool SecureTransport::prepare(SecureTransport::Client &) { return true; }
 bool AgentCredentialStore::load(AgentIdentity &value)
 {
     value.id = "00000000-0000-4000-8000-000000000001";

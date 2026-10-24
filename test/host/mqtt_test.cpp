@@ -32,7 +32,7 @@ bool AgentCredentialStore::loadMqtt(String &value) { value = mqttSecret; return 
 bool AgentMqttEnrollmentClient::provision() { ++provisions; mqttReady = true; return true; }
 #if EDOL_AGENT_SECURE_BUILD
 bool SecureTransport::synchronizeClock() { return clockReady; }
-bool SecureTransport::prepare(WiFiClientSecure &) { ++preparations; return trustReady; }
+bool SecureTransport::prepare(SecureTransport::Client &) { ++preparations; return trustReady; }
 #endif
 
 int main()

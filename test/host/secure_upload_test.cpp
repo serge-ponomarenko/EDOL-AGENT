@@ -18,7 +18,7 @@ bool AgentCredentialStore::load(AgentIdentity &identity)
     identity.secret = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     return paired;
 }
-bool SecureTransport::prepare(WiFiClientSecure &) { return trusted; }
+bool SecureTransport::prepare(SecureTransport::Client &) { return trusted; }
 
 int main()
 {

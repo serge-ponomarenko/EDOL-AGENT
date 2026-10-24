@@ -45,7 +45,21 @@ int main()
     rollover.record(build, UINT32_MAX - 499);
     assert(rollover.ready(build + 1, 500, build));
 
-    SecureTransport::Client client;
+    class InspectClient : public SecureTransport::Client
+    {
+    public:
+        FakeTlsContext &context() { return sslclient->ssl_ctx; }
+    } client;
+    InspectClient other;
+    assert(client.connect("192.0.2.1", 443));
+    assert(other.connect("192.0.2.2", 443, 5000));
+    assert(client.context().verify != nullptr && other.context().verify != nullptr);
+    assert(client.context().context != other.context().context);
+    assert(static_cast<unsigned char *>(client.context().context)[3] == 1);
+    assert(static_cast<unsigned char *>(other.context().context)[3] == 2);
+    assert(client.connect("core.example.invalid", 443));
+    assert(client.context().verify == nullptr); // Reused DNS client restores native verification.
+    assert(!client.connect("192.0.2.001", 443));
     assert(!SecureTransport::prepare(client));
     assert(!SecureTransport::synchronizeClock());
     assert(ntpAttempts == 1 && fakeMillis == 15000);

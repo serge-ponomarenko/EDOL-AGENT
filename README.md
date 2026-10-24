@@ -52,6 +52,17 @@ validates the bundle and generates an ignored build-local header. Do not commit
 trust material or pass PEM through compiler flags. Missing/invalid CA input
 fails the secure build. Building does not upload or contact EDOL.
 
+The audited secure environments pin Espressif32 6.13.0 / Arduino-ESP32 2.0.17
+(ESP-IDF 4.4.7, mbedTLS 2.28.7). That vendor verifier parses IP SANs but only
+matches DNS names. The secure client installs a connection-specific verifier
+for canonical IPv4: an exact four-byte iPAddress SAN is required, without CN,
+textual dNSName or wildcard fallback. It changes only the leaf identity decision;
+chain/signature/time/usage checks remain required. DNS uses the native verifier.
+The expected host still goes to set_hostname. Both HTTPS and secure MQTT use
+this client; printer LAN transports and Home are unchanged. A compile-time
+version guard requires review before changing mbedTLS. See verification.md for
+the exact vendor revision and real-certificate positive/negative evidence.
+
 The secure setup form accepts an owner-issued code from the EDOL printer Agent
 page instead of manual agent ID/password. Enter the configured HTTPS DNS/IPv4
 host and port (secure default 443; previously stored ports stay unchanged).

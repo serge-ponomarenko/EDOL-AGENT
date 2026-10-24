@@ -11,6 +11,8 @@ def run_test(root, name, production_source, secure=False, smoke=False):
     sources = [root / f"test/host/{name}_test.cpp"]
     if production_source:
         sources.append(root / production_source)
+    if secure and production_source:
+        sources.append(root / "src/security/SecureIpClient.cpp")
     extra_includes = []
     if name in ("enrollment", "mqtt_enrollment"):
         library = root / ".pio/libdeps/lolin_d32/ArduinoJson/src"

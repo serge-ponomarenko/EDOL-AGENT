@@ -1,5 +1,80 @@
 # Verification and publication record
 
+## Exact-vendor IPv4 SAN verification fix — 2026-10-23
+
+Operator evidence on `7f00b48`: Core endpoint 192.168.0.200:18443, certificate
+iPAddress SAN matches, OpenSSL IP verification succeeds, synchronized NTP and
+correct CA, mbedTLS flags 0x00000004 only (CN_MISMATCH). This supersedes the
+unknown-cause checkpoint below; no new hardware action was performed here.
+
+Installed SDK metadata: Espressif32 6.13.0, Arduino-ESP32 2.0.17 / framework
+3.20017.241212, ESP-IDF 4.4.7 at `38eeba213a`. The IDF tree's mbedTLS gitlink is
+`2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9`, whose version is **2.28.7**.
+The exact [vendor x509_crt.c](https://github.com/espressif/mbedtls/blob/2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9/library/x509_crt.c)
+retains all raw SAN entries in x509_get_subject_alt_name, but x509_crt_check_san
+accepts only dNSName. A SAN extension prevents CN fallback. Thus a correct
+binary IP SAN still produces CN_MISMATCH when set_hostname receives the IP.
+
+SecureIpClient installs mbedtls_ssl_set_verify per client/session before the
+unchanged Arduino TLS setup/handshake. In the exact vendor ssl_tls.c,
+ssl_setup retains that callback. The callback checks only the leaf identity:
+canonical IPv4 must equal an exact four-byte context-specific primitive tag 7
+SAN. A verified match replaces only the name flag, never other flags; failure
+adds CN_MISMATCH even if native CN/textual DNS matching accepted the IP string.
+Other chain depths are untouched. DNS uses native verification. The original
+hostname and VERIFY_REQUIRED remain; no null hostname, setInsecure, global
+linker hook, SDK installation patch or deployment trust-material change.
+The secure platform is pinned, with an mbedTLS version compile guard for review
+on SDK upgrades. Normal and smoke secure profiles share this implementation;
+Home and local-printer transports do not use the new verifier.
+
+### Targeted results
+
+- **16 real-vendor cases PASS**: native IP-SAN failure reproduced; matching IP
+  succeeds; foreign IP, wrong IP SAN, matching CN without IP SAN, textual DNS IP,
+  malformed IP SAN rejected; mixed SAN accepted; DNS positive/negative retained;
+  wrong CA, expired, future and corrupted signature rejected; pre-setup callback,
+  hostname and VERIFY_REQUIRED preserved; parser/non-leaf isolation checked.
+- **10 existing native executables PASS**, now including secure-client callback
+  installation, independent clients, DNS reuse and ambiguous-IP rejection.
+  The full runner still exits 1 only for Windows WinError 32/5 final temporary
+  directory cleanup after tests pass. Do not label that runner exit a clean PASS.
+- **3 CA-hook Python tests PASS**; Home, secure and secure_smoke ESP32 builds
+  PASS. Secure ELF contains the IP verifier, four connect overrides and
+  mbedtls_ssl_set_verify; Home ELF contains no SecureTransport::Client/IP verifier.
+- Read-only Sonar: both changed Python runners have no findings. C++/CMake
+  analysis is unsupported. git diff --check passed.
+- **NOT RUN:** ESP32 TLS handshake/enrollment/MQTT/telemetry acceptance for the
+  new firmware. Vendor tests execute real certificate parsing, signature/chain
+  and identity verification on the host, plus context setup; they do not claim
+  an ESP32 handshake or a live Stage 9 endpoint connection.
+
+The native fixture uses the exact downloaded vendor source, verified by source
+hashes. Archive SHA256:
+`5bcafd9cc465b6009d9f9225c79af2bc62368b469f65ee7b52167540e157fffd`.
+All generated test CA/private keys/certificates stay under ignored .pio; they
+are unrelated to Stage 9. Never publish them or substitute them on the device.
+The native build uses desktop crypto/configuration from the same vendor source;
+it does not emulate ESP32 hardware acceleration or the whole embedded SDK config.
+
+Maintainer reproduction (not an operator prerequisite; use the pinned vendor
+archive extracted under ignored .pio and an installed OpenSSL):
+
+```text
+py scripts/run_ip_san_tests.py --mbedtls-source .pio/ip-san-vendor/mbedtls-2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9 --openssl "C:/Program Files/Git/usr/bin/openssl.exe"
+py scripts/run_host_tests.py
+py test/test_secure_trust.py
+```
+
+Pinned source archive:
+https://codeload.github.com/espressif/mbedtls/zip/2b8e772fc1cb0732cda3bae7d1e9d6f4cfaf63d9
+
+Before rebuilding, the existing local smoke binary was preserved as
+`stage9-restoration/pre-ip-san-fix-7f00b48.bin`, SHA256
+`777de1ab437b59732bbb06f2e6349b83e6baf2808b046776c748362a90687e0a`.
+It is a saved local artifact, not a verified device dump. No flash, serial,
+deployment, reset, NVS change or Stage 9 network access occurred.
+
 ## Single-form secure setup — 2026-10-23
 
 Source now keeps one form open while automatically performing Wi-Fi, NTP,
